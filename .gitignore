@@ -1,0 +1,29 @@
+# Unity generated folders (regenerated automatically by the Editor)
+/Library/
+/Temp/
+/Logs/
+/UserSettings/
+/MemoryCaptures/
+/Builds/
+/Build/
+/obj/
+*.csproj
+*.sln
+.vs/
+.vsconfig
+
+# Pipeline bridge / local tooling scratch
+/pipeline_queue/
+pipeline_check_output.json
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Python cache from the art/audio generation scripts
+__pycache__/
+*.pyc
+
+# Unity generated meta junk occasionally left by crashes
+sysinfo.txt
+*.tmp

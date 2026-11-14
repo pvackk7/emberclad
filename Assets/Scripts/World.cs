@@ -45,18 +45,18 @@ public static class World
 
     static void Obstacle(float x, float y, float r) { obs.Add(new Ob { c = new Vector2(x, y), r = r }); }
 
-    static Transform Layer(Transform root, string sprite, float factor, float y, int order, string layer, float from, float to, bool followY, float tileW = -1)
+    static Transform Layer(Transform root, string sprite, float factor, float y, int order, string layer, float from, float to, bool followY, float tileW = -1, float scale = 1f)
     {
         var go = new GameObject("Layer_" + sprite); go.transform.SetParent(root, false);
         var p = go.AddComponent<Parallax>(); p.factor = factor; p.baseY = y; p.followY = followY;
         float t = tileW > 0 ? tileW : Tile;
-        for (float x = from; x < to; x += t) { var sr = Art.New(sprite, go.transform, new Vector3(x, 0, 0), order, layer); }
+        for (float x = from; x < to; x += t) { var sr = Art.New(sprite, go.transform, new Vector3(x, 0, 0), order, layer); sr.transform.localScale = Vector3.one * scale; }
         return go.transform;
     }
 
     // World-space tile widths for hand-drawn backgrounds whose native resolution/PPU differs from
     // the original procedural art (which was all authored at 2048px / 100ppu = 20.48 world units).
-    public const float TileMid = 27.15f, TileCanopy = 12.63f, TileGround = 16.71f;
+    public const float TileMid = 16.29f, TileCanopy = 12.63f, TileGround = 16.71f;
 
     public static void Build(Transform root, Transform cam)
     {
@@ -65,12 +65,12 @@ public static class World
         // --- backdrop ---
         var sky = Art.New("bg_sky", cam, new Vector3(0, 0, 10), -100, "Background");
         sky.transform.localScale = new Vector3(600, 4.2f, 1);
-        Layer(root, "bg_far", 0.86f, 0.25f, -90, "Background", -Tile, len * 0.14f + 2 * Tile, true);
-        Layer(root, "bg_mid", 0.62f, 0.12f, -80, "Background", -TileMid, len * 0.38f + 2 * TileMid, true, TileMid);
+        Layer(root, "bg_far", 0.92f, 0.25f, -90, "Background", -Tile, len * 0.14f + 2 * Tile, true);
+        Layer(root, "bg_mid", 0.82f, 0.12f, -80, "Background", -TileMid, len * 0.38f + 2 * TileMid, true, TileMid, 0.75f);
         var ground = new GameObject("Ground").transform; ground.SetParent(root, false);
         for (float x = -2 * TileGround; x < len + TileGround; x += TileGround) Art.New("bg_ground", ground, new Vector3(x, -0.2f, 0), -50, "Background");
-        Layer(root, "bg_canopy", 0.12f, 5.15f, -10, "Foreground", -TileCanopy, len * 0.88f + 2 * TileCanopy, true, TileCanopy);
-        Layer(root, "bg_fg", -0.3f, -5.95f, 0, "Foreground", -Tile, len * 1.3f + 2 * Tile, true);
+        Layer(root, "bg_canopy", 0.65f, 5.15f, -10, "Foreground", -TileCanopy, len * 0.88f + 2 * TileCanopy, true, TileCanopy);
+        Layer(root, "bg_fg", 0.48f, -5.95f, 0, "Foreground", -Tile, len * 1.3f + 2 * Tile, true);
         var vig = Art.New("fx_vignette", cam, new Vector3(0, 0, 9), 100, "Foreground");
         vig.transform.localScale = new Vector3(4.6f, 3.6f, 1);
         // --- light shafts ---
@@ -87,16 +87,31 @@ public static class World
         string[] trunks = { "pr_trunk_a", "pr_trunk_b", "pr_trunk_c", "pr_trunk_b" };
         for (float x = -9; x < len; x += R(3.4f, 6.2f))
             Prop(back, trunks[rng.Next(trunks.Length)], x, R(-1.05f, -0.72f), R(0.95f, 1.12f), Chance(0.5f));
-        string[] bushes = { "pr_bush_a", "pr_bush_b", "pr_bush_c", "pr_fern_a", "pr_fern_b", "pr_bush_b" };
-        for (float x = -9; x < len; x += R(1.6f, 3.4f))
-            Prop(back, bushes[rng.Next(bushes.Length)], x, R(-1.2f, -0.92f), R(0.9f, 1.15f), Chance(0.5f), 1.6f);
+        string[] bushes = { "pr_bush_a", "pr_bush_b", "pr_bush_c", "pr_fern_a", "pr_fern_b" };
+        for (float x = -9; x < len;)
+        {
+            float clusterWidth = R(2.4f, 5.4f);
+            int clusterCount = rng.Next(1, 4);
+            for (int i = 0; i < clusterCount; i++)
+            {
+                float position = x + ((i + R(0.15f, 0.85f)) / clusterCount) * clusterWidth;
+                Prop(back, bushes[rng.Next(bushes.Length)], position, R(-1.22f, -0.96f), R(0.78f, 1.2f), Chance(0.5f));
+            }
+            x += clusterWidth + R(2f, 4.8f);
+        }
         float[] ruinPillars = { 50.5f, 61f, 70.5f, 122f, 127f, 140.5f, -5.5f };
         foreach (var x in ruinPillars) Prop(back, Chance(0.5f) ? "pr_pillar_tall" : "pr_pillar_mid", x, R(-1.12f, -0.95f));
         float[] walls = { 56f, 66f, 132f, -8.5f, 143.5f, 145.5f };
         foreach (var x in walls) Prop(back, "pr_wall", x, -1.02f, 1.1f, Chance(0.5f));
         // dense edges so the level visibly begins and ends
         for (int i = 0; i < 4; i++) { Prop(back, trunks[i % 3], MinX - 2.2f - i * 0.5f, -1.3f - i * 0.75f, 1.15f); Prop(back, trunks[(i + 1) % 3], MaxX + 2.6f + i * 0.5f, -1.3f - i * 0.75f, 1.15f, true); }
-        for (int i = 0; i < 5; i++) { Prop(back, "pr_bush_c", MinX - 1.6f, -1.5f - i * 0.6f, 1.1f, false, 1.5f); Prop(back, "pr_bush_c", MaxX + 1.9f, -1.5f - i * 0.6f, 1.1f, true, 1.5f); }
+        for (int i = 0; i < 3; i++)
+        {
+            float leftX = MinX - 1.4f + i * 0.85f;
+            float rightX = MaxX + 1.1f + i * 0.85f;
+            Prop(back, bushes[rng.Next(bushes.Length)], leftX, R(-1.65f, -1.05f), R(0.9f, 1.2f), Chance(0.5f));
+            Prop(back, bushes[rng.Next(bushes.Length)], rightX, R(-1.65f, -1.05f), R(0.9f, 1.2f), Chance(0.5f));
+        }
         // --- obstacles in the lane (with collision) ---
         var lane = new GameObject("Lane").transform; lane.SetParent(root, false);
         void Rock(float x, float y) { Prop(lane, "pr_rock_a", x, y, R(0.9f, 1.1f), Chance(0.5f)); Obstacle(x, y + 0.12f, 0.55f); }

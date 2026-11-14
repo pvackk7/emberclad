@@ -43,10 +43,13 @@ for n in names:
     e=np.pad(im,((2,2),(2,2),(0,0)),mode='edge'); atlas[py-2:py+h+2,px-2:px+w+2]=e
     m=meta[n]; lines.append('%s %d %d %d %d %.4f %.4f %d %d'%(n,px,AHp-py-h,w,h,m['px'],m['py'],m['ppu'],border.get(n,0)))
 Image.fromarray(atlas,'RGBA').save(os.path.join(res,'Art','atlas.png'))
+preserved_backgrounds={'bg_canopy','bg_ground','bg_mid'}
 for n in meta:
     if n.startswith('bg_'):
-        Image.open(os.path.join(OUTDIR,n+'.png')).save(os.path.join(res,'Art',n+'.png'))
+        if n not in preserved_backgrounds: Image.open(os.path.join(OUTDIR,n+'.png')).save(os.path.join(res,'Art',n+'.png'))
         m=meta[n]; lines.append('%s -1 0 %d %d %.4f %.4f %d 0'%(n,m['w'],m['h'],m['px'],m['py'],m['ppu']))
 open(os.path.join(res,'Art','atlas_map.txt'),'w').write('\n'.join(lines))
-import shutil; shutil.copy('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',os.path.join(res,'Fonts','GameFont.ttf'))
+import shutil
+font_path=os.path.join(res,'Fonts','GameFont.ttf')
+if not os.path.exists(font_path): shutil.copy('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',font_path)
 print('sprites',len(lines))

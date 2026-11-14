@@ -45,13 +45,18 @@ public static class World
 
     static void Obstacle(float x, float y, float r) { obs.Add(new Ob { c = new Vector2(x, y), r = r }); }
 
-    static Transform Layer(Transform root, string sprite, float factor, float y, int order, string layer, float from, float to, bool followY)
+    static Transform Layer(Transform root, string sprite, float factor, float y, int order, string layer, float from, float to, bool followY, float tileW = -1)
     {
         var go = new GameObject("Layer_" + sprite); go.transform.SetParent(root, false);
         var p = go.AddComponent<Parallax>(); p.factor = factor; p.baseY = y; p.followY = followY;
-        for (float x = from; x < to; x += Tile) { var sr = Art.New(sprite, go.transform, new Vector3(x, 0, 0), order, layer); }
+        float t = tileW > 0 ? tileW : Tile;
+        for (float x = from; x < to; x += t) { var sr = Art.New(sprite, go.transform, new Vector3(x, 0, 0), order, layer); }
         return go.transform;
     }
+
+    // World-space tile widths for hand-drawn backgrounds whose native resolution/PPU differs from
+    // the original procedural art (which was all authored at 2048px / 100ppu = 20.48 world units).
+    public const float TileMid = 27.15f, TileCanopy = 12.63f, TileGround = 16.71f;
 
     public static void Build(Transform root, Transform cam)
     {
@@ -61,10 +66,10 @@ public static class World
         var sky = Art.New("bg_sky", cam, new Vector3(0, 0, 10), -100, "Background");
         sky.transform.localScale = new Vector3(600, 4.2f, 1);
         Layer(root, "bg_far", 0.86f, 0.25f, -90, "Background", -Tile, len * 0.14f + 2 * Tile, true);
-        Layer(root, "bg_mid", 0.62f, 0.12f, -80, "Background", -Tile, len * 0.38f + 2 * Tile, true);
+        Layer(root, "bg_mid", 0.62f, 0.12f, -80, "Background", -TileMid, len * 0.38f + 2 * TileMid, true, TileMid);
         var ground = new GameObject("Ground").transform; ground.SetParent(root, false);
-        for (float x = -2 * Tile; x < len + Tile; x += Tile) Art.New("bg_ground", ground, new Vector3(x, -0.2f, 0), -50, "Background");
-        Layer(root, "bg_canopy", 0.12f, 5.15f, -10, "Foreground", -Tile, len * 0.88f + 2 * Tile, true);
+        for (float x = -2 * TileGround; x < len + TileGround; x += TileGround) Art.New("bg_ground", ground, new Vector3(x, -0.2f, 0), -50, "Background");
+        Layer(root, "bg_canopy", 0.12f, 5.15f, -10, "Foreground", -TileCanopy, len * 0.88f + 2 * TileCanopy, true, TileCanopy);
         Layer(root, "bg_fg", -0.3f, -5.95f, 0, "Foreground", -Tile, len * 1.3f + 2 * Tile, true);
         var vig = Art.New("fx_vignette", cam, new Vector3(0, 0, 9), 100, "Foreground");
         vig.transform.localScale = new Vector3(4.6f, 3.6f, 1);

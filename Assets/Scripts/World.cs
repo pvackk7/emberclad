@@ -57,34 +57,22 @@ public static class World
         return go.transform;
     }
 
-    // World-space tile widths for hand-drawn backgrounds whose native resolution/PPU differs from
-    // the original procedural art (which was all authored at 2048px / 100ppu = 20.48 world units).
     public const float TileMid = 27.15f, TileCanopy = 12.63f, TileGround = 16.71f;
-    // Top edge of the floor layer, tucked just behind the lane's back edge (MaxY) so the floor
-    // runs a little further back than the player can walk and never ends inside the lane.
-    public const float FloorTop = -1.25f;
+    public const float FloorTop = -0.92f;
+    const float BackMin = -1.28f, BackMax = -1.00f;
 
     public static void Build(Transform root, Transform cam)
     {
         rng = new System.Random(20261114); obs.Clear(); lockMin = -999; lockMax = 999;
         float len = MaxX + 14;
-        // --- backdrop ---
         var sky = Art.New("bg_sky", cam, new Vector3(0, 0, 10), -100, "Background");
         sky.transform.localScale = new Vector3(600, 4.2f, 1);
-        Layer(root, "bg_far", 0.86f, 0.25f, -90, "Background", -Tile, len * 0.14f + 2 * Tile, true);
-        // bg_mid is backdrop only — trunks, bushes and misty distance. Its lower edge fades into
-        // shadow at FloorTop, where the floor layer takes over.
-        Layer(root, "bg_mid", 0.62f, 0.862f, -80, "Background", -TileMid, len * 0.38f + 2 * TileMid, true, TileMid, true);
-        // The walkable forest floor is its own layer rather than being painted into the backdrop,
-        // so the lane sits on real ground instead of a flat slab. Not parallaxed: it has to track
-        // the world 1:1 or props and actors would slide across it.
+        Layer(root, "bg_mid", 0.35f, 1.10f, -80, "Background", -TileMid, len * 0.68f + 2 * TileMid, true, TileMid, true);
         var ground = new GameObject("Ground").transform; ground.SetParent(root, false);
         for (float x = -2 * TileGround; x < len + 2 * TileGround; x += TileGround) Art.New("ground", ground, new Vector3(x, FloorTop, 0), -60, "Background");
-        // bramble fringe along the bottom of the frame, in front of the floor
         var fringe = new GameObject("Fringe").transform; fringe.SetParent(root, false);
-        for (float x = -2 * TileGround; x < len + TileGround; x += TileGround) Art.New("bg_ground", fringe, new Vector3(x, -0.2f, 0), -50, "Background");
-        Layer(root, "bg_canopy", 0.12f, 5.15f, -10, "Foreground", -TileCanopy, len * 0.88f + 2 * TileCanopy, true, TileCanopy, true);
-        Layer(root, "bg_fg", -0.3f, -5.95f, 0, "Foreground", -Tile, len * 1.3f + 2 * Tile, true);
+        for (float x = -2 * TileGround; x < len + 2 * TileGround; x += TileGround) Art.New("bg_ground", fringe, new Vector3(x, -0.55f, 0), 0, "Foreground");
+        Layer(root, "bg_canopy", 0.08f, 5.15f, -10, "Foreground", -TileCanopy, len * 0.95f + 2 * TileCanopy, true, TileCanopy, true);
         var vig = Art.New("fx_vignette", cam, new Vector3(0, 0, 9), 100, "Foreground");
         vig.transform.localScale = new Vector3(4.6f, 3.6f, 1);
         // --- light shafts ---
@@ -96,30 +84,28 @@ public static class World
             r.transform.localRotation = Quaternion.Euler(0, 0, R(-24, -15)); r.transform.localScale = new Vector3(R(1.2f, 2.6f), R(1.9f, 2.3f), 1);
             var pu = r.gameObject.AddComponent<Pulse>(); pu.baseColor = new Color(1, 0.95f, 0.75f, R(0.16f, 0.3f)); pu.speed = R(0.3f, 0.7f); pu.phase = R(0, 6.28f); pu.amount = 0.35f;
         }
-        // --- back row: trunks, bushes, ruins ---
         var back = new GameObject("BackRow").transform; back.SetParent(root, false);
-        // Ground-line note (vakgpt art): bg_mid paints its own forest floor. The back of that floor
-        // — where the painted logs and rocks lie at the foot of the trunks — sits at about y = -1.3,
-        // and the bright open grass starts at about y = -2.4. The old procedural backdrop had ground
-        // much higher, so dressing authored for it (y = -0.7 .. -1.2) now hangs in mid-air over the
-        // painted trunks. Everything below is pinned to the painted floor instead.
-        // Large back-row props stay above MaxY (-1.3) so Art.YOrder keeps them behind the player
-        // rather than occluding them.
-        string[] trunks = { "pr_trunk_a", "pr_trunk_b", "pr_trunk_c", "pr_trunk_b" };
-        for (float x = -9; x < len; x += R(3.4f, 6.2f))
-            Prop(back, trunks[rng.Next(trunks.Length)], x, R(-1.28f, -1.12f), R(0.95f, 1.12f), Chance(0.5f));
-        // pr_bush_* dropped from the back-row dressing: the vakgpt bg_mid art already paints its
-        // own bushes into the scene, so the old round procedural ones just floated on top of it.
-        string[] bushes = { "pr_fern_a", "pr_fern_b" };
-        for (float x = -9; x < len; x += R(1.6f, 3.4f))
-            Prop(back, bushes[rng.Next(bushes.Length)], x, R(-1.52f, -1.30f), R(0.9f, 1.15f), Chance(0.5f), 1.6f);
-        float[] ruinPillars = { 50.5f, 61f, 70.5f, 122f, 127f, 140.5f, -5.5f };
-        foreach (var x in ruinPillars) Prop(back, Chance(0.5f) ? "pr_pillar_tall" : "pr_pillar_mid", x, R(-1.28f, -1.16f));
-        float[] walls = { 56f, 66f, 132f, -8.5f, 143.5f, 145.5f };
-        foreach (var x in walls) Prop(back, "pr_wall", x, -1.22f, 1.1f, Chance(0.5f));
-        // dense edges so the level visibly begins and ends
-        for (int i = 0; i < 4; i++) { Prop(back, trunks[i % 3], MinX - 2.2f - i * 0.5f, -1.3f - i * 0.75f, 1.15f); Prop(back, trunks[(i + 1) % 3], MaxX + 2.6f + i * 0.5f, -1.3f - i * 0.75f, 1.15f, true); }
-        for (int i = 0; i < 5; i++) { Prop(back, "pr_fern_a", MinX - 1.6f, -1.5f - i * 0.6f, 1.1f, false, 1.5f); Prop(back, "pr_fern_a", MaxX + 1.9f, -1.5f - i * 0.6f, 1.1f, true, 1.5f); }
+        string[] trunks = { "pr_trunk_a", "pr_trunk_b", "pr_trunk_c" };
+        float[] grove = { -6f, 16f, 41f, 69f, 95f, 127f, 145f };
+        foreach (var gx in grove)
+        {
+            int n = 1;
+            for (int i = 0; i < n; i++)
+                Prop(back, trunks[rng.Next(trunks.Length)], gx + i * R(2.2f, 3.4f) + R(-1f, 1f), R(BackMin, BackMax), R(0.9f, 1.08f), Chance(0.5f));
+        }
+        float[] ruinPillars = { 50.5f, 61f, 122f, 140.5f };
+        foreach (var x in ruinPillars) Prop(back, Chance(0.5f) ? "pr_pillar_tall" : "pr_pillar_mid", x, R(BackMin, BackMax), R(0.95f, 1.05f), Chance(0.5f));
+        float[] walls = { 56f, 132f, -8.5f };
+        foreach (var x in walls) Prop(back, "pr_wall", x, R(BackMin, BackMax), 1.05f, Chance(0.5f));
+        string[] shrubs = { "pr_bush_a", "pr_bush_b", "pr_bush_c", "pr_fern_a", "pr_fern_b" };
+        float[] thickets = { -7f, 2f, 13f, 27f, 35f, 52f, 68f, 73f, 91f, 99f, 112f, 126f, 139f };
+        foreach (var tx in thickets)
+        {
+            int n = 2 + rng.Next(3);
+            for (int i = 0; i < n; i++)
+                Prop(back, shrubs[rng.Next(shrubs.Length)], tx + R(-2.2f, 2.2f), R(BackMin, BackMax), R(0.85f, 1.1f), Chance(0.5f), 1.4f);
+        }
+        for (int i = 0; i < 4; i++) { Prop(back, trunks[i % 3], MinX - 2.2f - i * 0.5f, R(BackMin, BackMax), 1.1f); Prop(back, trunks[(i + 1) % 3], MaxX + 2.6f + i * 0.5f, R(BackMin, BackMax), 1.1f, true); }
         // --- obstacles in the lane (with collision) ---
         var lane = new GameObject("Lane").transform; lane.SetParent(root, false);
         void Rock(float x, float y) { Prop(lane, "pr_rock_a", x, y, R(0.9f, 1.1f), Chance(0.5f)); Obstacle(x, y + 0.12f, 0.55f); }
@@ -130,23 +116,28 @@ public static class World
         Stump(96.5f, -1.75f); Log(100.5f, -3.6f); Rock(115.5f, -3.55f); Pillar(120.5f, -1.65f); Pillar(124.5f, -3.6f);
         // --- shrine at the end ---
         var sh = Prop(lane, "pr_shrine", 136.5f, -1.55f, 1.0f); shrine = sh.transform; Obstacle(136.5f, -1.45f, 0.7f);
-        // --- lane dressing (no collision) ---
-        for (float x = -3; x < MaxX + 3; x += R(0.5f, 1.3f))
+        for (float cx = -3; cx < MaxX + 3; cx += R(3.2f, 7.5f))
         {
-            float y = Chance(0.5f) ? R(-2.25f, -1.62f) : R(-3.85f, -3.5f);
-            if (Chance(0.12f)) y = R(-3.4f, -2.5f);
-            double k = rng.NextDouble();
-            if (k < 0.48) Prop(lane, Chance(0.5f) ? "pr_grass_a" : (Chance(0.5f) ? "pr_grass_b" : "pr_grass_c"), x, y, R(0.8f, 1.15f), Chance(0.5f), 5f);
-            else if (k < 0.66) Prop(lane, Chance(0.4f) ? "pr_flower_w" : (Chance(0.5f) ? "pr_flower_y" : "pr_flower_p"), x, y, R(0.85f, 1.1f), Chance(0.5f), 6f);
-            else if (k < 0.74) Prop(lane, Chance(0.5f) ? "pr_fern_a" : "pr_fern_b", x, y, R(0.7f, 0.95f), Chance(0.5f), 3f);
-            else if (k < 0.80)
+            if (Chance(0.22f)) continue;
+            int n = 2 + rng.Next(4);
+            bool backBand = Chance(0.55f);
+            for (int i = 0; i < n; i++)
             {
-                var m = Prop(lane, "pr_shrooms", x, y, R(0.8f, 1.1f), Chance(0.5f));
-                var g = Art.New("fx_glow", m.transform, new Vector3(0, 0.25f, 0), m.sortingOrder + 1, "Default", true);
-                g.transform.localScale = Vector3.one * 1.3f; var pu = g.gameObject.AddComponent<Pulse>(); pu.baseColor = new Color(0.4f, 0.95f, 1f, 0.38f); pu.speed = R(1f, 2f); pu.phase = R(0, 6); pu.amount = 0.4f;
+                float x = cx + R(-2.4f, 2.4f);
+                float y = backBand ? R(-2.45f, -1.5f) : R(-3.85f, -3.25f);
+                double k = rng.NextDouble();
+                if (k < 0.44) Prop(lane, Chance(0.5f) ? "pr_grass_a" : (Chance(0.5f) ? "pr_grass_b" : "pr_grass_c"), x, y, R(0.8f, 1.15f), Chance(0.5f), 5f);
+                else if (k < 0.62) Prop(lane, Chance(0.4f) ? "pr_flower_w" : (Chance(0.5f) ? "pr_flower_y" : "pr_flower_p"), x, y, R(0.85f, 1.1f), Chance(0.5f), 6f);
+                else if (k < 0.74) Prop(lane, Chance(0.5f) ? "pr_fern_a" : "pr_fern_b", x, y, R(0.7f, 0.95f), Chance(0.5f), 3f);
+                else if (k < 0.82)
+                {
+                    var m = Prop(lane, "pr_shrooms", x, y, R(0.8f, 1.1f), Chance(0.5f));
+                    var g = Art.New("fx_glow", m.transform, new Vector3(0, 0.25f, 0), m.sortingOrder + 1, "Default", true);
+                    g.transform.localScale = Vector3.one * 1.3f; var pu = g.gameObject.AddComponent<Pulse>(); pu.baseColor = new Color(0.4f, 0.95f, 1f, 0.38f); pu.speed = R(1f, 2f); pu.phase = R(0, 6); pu.amount = 0.4f;
+                }
+                else if (k < 0.92) Prop(lane, "pr_rock_b", x, y, R(0.7f, 1f), Chance(0.5f));
+                else Prop(lane, "pr_bones", x, y, R(0.8f, 1f), Chance(0.5f));
             }
-            else if (k < 0.85) Prop(lane, "pr_rock_b", x, y, R(0.7f, 1f), Chance(0.5f));
-            else if (k < 0.89) Prop(lane, "pr_bones", x, y, R(0.8f, 1f), Chance(0.5f));
         }
         root.gameObject.AddComponent<Ambient>();
     }

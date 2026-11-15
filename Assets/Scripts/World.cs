@@ -90,7 +90,9 @@ public static class World
         string[] trunks = { "pr_trunk_a", "pr_trunk_b", "pr_trunk_c", "pr_trunk_b" };
         for (float x = -9; x < len; x += R(3.4f, 6.2f))
             Prop(back, trunks[rng.Next(trunks.Length)], x, R(-1.05f, -0.72f), R(0.95f, 1.12f), Chance(0.5f));
-        string[] bushes = { "pr_bush_a", "pr_bush_b", "pr_bush_c", "pr_fern_a", "pr_fern_b", "pr_bush_b" };
+        // pr_bush_* dropped from the back-row dressing: the vakgpt bg_mid art already paints its
+        // own bushes into the scene, so the old round procedural ones just floated on top of it.
+        string[] bushes = { "pr_fern_a", "pr_fern_b" };
         for (float x = -9; x < len; x += R(1.6f, 3.4f))
             Prop(back, bushes[rng.Next(bushes.Length)], x, R(-1.2f, -0.92f), R(0.9f, 1.15f), Chance(0.5f), 1.6f);
         float[] ruinPillars = { 50.5f, 61f, 70.5f, 122f, 127f, 140.5f, -5.5f };
@@ -99,7 +101,7 @@ public static class World
         foreach (var x in walls) Prop(back, "pr_wall", x, -1.02f, 1.1f, Chance(0.5f));
         // dense edges so the level visibly begins and ends
         for (int i = 0; i < 4; i++) { Prop(back, trunks[i % 3], MinX - 2.2f - i * 0.5f, -1.3f - i * 0.75f, 1.15f); Prop(back, trunks[(i + 1) % 3], MaxX + 2.6f + i * 0.5f, -1.3f - i * 0.75f, 1.15f, true); }
-        for (int i = 0; i < 5; i++) { Prop(back, "pr_bush_c", MinX - 1.6f, -1.5f - i * 0.6f, 1.1f, false, 1.5f); Prop(back, "pr_bush_c", MaxX + 1.9f, -1.5f - i * 0.6f, 1.1f, true, 1.5f); }
+        for (int i = 0; i < 5; i++) { Prop(back, "pr_fern_a", MinX - 1.6f, -1.5f - i * 0.6f, 1.1f, false, 1.5f); Prop(back, "pr_fern_a", MaxX + 1.9f, -1.5f - i * 0.6f, 1.1f, true, 1.5f); }
         // --- obstacles in the lane (with collision) ---
         var lane = new GameObject("Lane").transform; lane.SetParent(root, false);
         void Rock(float x, float y) { Prop(lane, "pr_rock_a", x, y, R(0.9f, 1.1f), Chance(0.5f)); Obstacle(x, y + 0.12f, 0.55f); }

@@ -7,7 +7,8 @@ public class Hud : MonoBehaviour
 {
     Game game; Font font; RectTransform root;
     RectTransform hpFill, hpTrail, bossFill, bossPanel, goArrow, combo, promptPanel, titlePanel, deathPanel, victoryPanel, helpPanel, bannerRT, fade;
-    Image[] embers = new Image[3]; Text comboText, bannerText, pressText; Image fadeImg; CanvasGroup titleCg, promptCg, bannerCg, deathCg, victoryCg;
+    Image[] embers = new Image[3]; Text comboText, bannerText, pressText, fpsText;
+    float fpsAccum, fpsWorst; int fpsFrames; bool fpsOn = true; Image fadeImg; CanvasGroup titleCg, promptCg, bannerCg, deathCg, victoryCg;
     float hpShown = 1, trail = 1, comboPunch, manaPulse, bannerT, bannerDur, goT, promptT; bool goOn, titleOn; int lastCombo, promptIdx = -1, shownPrompt = -1; Enemy boss; float bossShown = 1;
     const float HpW = 340, BossW = 820;
 
@@ -90,6 +91,7 @@ public class Hud : MonoBehaviour
 
         // --- combo counter ---
         combo = Rect("Combo", root, TR, new Vector2(-60, -220), new Vector2(400, 120));
+        fpsText = Txt("", root, TR, new Vector2(-14, -10), new Vector2(260, 30), 22, new Color(0.65f, 1f, 0.72f, 0.95f), TextAnchor.UpperRight, new Vector2(1, 1));
         comboText = Txt("", combo, C, Vector2.zero, new Vector2(400, 120), 64, Gold, TextAnchor.MiddleRight);
         Txt("HITS", combo, C, new Vector2(0, -56), new Vector2(400, 40), 26, Cream, TextAnchor.MiddleRight);
         combo.gameObject.SetActive(false);
@@ -214,6 +216,18 @@ public class Hud : MonoBehaviour
     void Update()
     {
         float dt = Time.unscaledDeltaTime; var p = game.player;
+        if (Input.GetKeyDown(KeyCode.F1)) { fpsOn = !fpsOn; fpsText.enabled = fpsOn; }
+        if (fpsOn)
+        {
+            fpsAccum += dt; fpsFrames++; if (dt > fpsWorst) fpsWorst = dt;
+            if (fpsAccum >= 0.25f)
+            {
+                float avg = fpsFrames / fpsAccum;
+                fpsText.text = string.Format("{0:0} fps   {1:0.0} ms   min {2:0}", avg, 1000f * fpsAccum / fpsFrames, 1f / Mathf.Max(fpsWorst, 0.0001f));
+                fpsText.color = avg >= 55 ? new Color(0.65f, 1f, 0.72f, 0.95f) : avg >= 30 ? new Color(1f, 0.88f, 0.5f, 0.95f) : new Color(1f, 0.55f, 0.5f, 0.95f);
+                fpsAccum = 0; fpsFrames = 0; fpsWorst = 0;
+            }
+        }
         // fade in
         if (fadeImg.color.a > 0) { var c = fadeImg.color; c.a = Mathf.MoveTowards(c.a, 0, dt * 1.6f); fadeImg.color = c; if (c.a <= 0) fade.gameObject.SetActive(false); }
         // health

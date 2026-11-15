@@ -57,7 +57,7 @@ public static class World
         return go.transform;
     }
 
-    public const float TileMid = 27.15f, TileCanopy = 12.63f, TileGround = 16.71f;
+    public const float TileMid = 19.745f, TileCanopy = 12.63f, TileGround = 16.71f;
     public const float FloorTop = -0.92f;
     const float BackMin = -1.28f, BackMax = -1.00f;
 
@@ -67,12 +67,12 @@ public static class World
         float len = MaxX + 14;
         var sky = Art.New("bg_sky", cam, new Vector3(0, 0, 10), -100, "Background");
         sky.transform.localScale = new Vector3(600, 4.2f, 1);
-        Layer(root, "bg_mid", 0.35f, 1.10f, -80, "Background", -TileMid, len * 0.68f + 2 * TileMid, true, TileMid, true);
+        Layer(root, "bg_mid", 0.35f, 1.34f, -80, "Background", -TileMid, len * 0.68f + 2 * TileMid, true, TileMid);
         var ground = new GameObject("Ground").transform; ground.SetParent(root, false);
         for (float x = -2 * TileGround; x < len + 2 * TileGround; x += TileGround) Art.New("ground", ground, new Vector3(x, FloorTop, 0), -60, "Background");
         var fringe = new GameObject("Fringe").transform; fringe.SetParent(root, false);
         for (float x = -2 * TileGround; x < len + 2 * TileGround; x += TileGround) Art.New("bg_ground", fringe, new Vector3(x, -0.55f, 0), 0, "Foreground");
-        Layer(root, "bg_canopy", 0.08f, 5.15f, -10, "Foreground", -TileCanopy, len * 0.95f + 2 * TileCanopy, true, TileCanopy, true);
+        Layer(root, "bg_canopy", 0.08f, 5.15f, -10, "Foreground", -TileCanopy, len * 0.95f + 2 * TileCanopy, true, TileCanopy);
         var vig = Art.New("fx_vignette", cam, new Vector3(0, 0, 9), 100, "Foreground");
         vig.transform.localScale = new Vector3(4.6f, 3.6f, 1);
         // --- light shafts ---
@@ -85,7 +85,7 @@ public static class World
             var pu = r.gameObject.AddComponent<Pulse>(); pu.baseColor = new Color(1, 0.95f, 0.75f, R(0.16f, 0.3f)); pu.speed = R(0.3f, 0.7f); pu.phase = R(0, 6.28f); pu.amount = 0.35f;
         }
         var back = new GameObject("BackRow").transform; back.SetParent(root, false);
-        string[] trunks = { "pr_trunk_a", "pr_trunk_b", "pr_trunk_c" };
+        string[] trunks = { "pr_trunk_a", "pr_trunk_b", "pr_trunk_c", "pr_trunk_d" };
         float[] grove = { -6f, 16f, 41f, 69f, 95f, 127f, 145f };
         foreach (var gx in grove)
         {
@@ -127,7 +127,7 @@ public static class World
                 float y = backBand ? R(-2.45f, -1.5f) : R(-3.85f, -3.25f);
                 double k = rng.NextDouble();
                 if (k < 0.44) Prop(lane, Chance(0.5f) ? "pr_grass_a" : (Chance(0.5f) ? "pr_grass_b" : "pr_grass_c"), x, y, R(0.8f, 1.15f), Chance(0.5f), 5f);
-                else if (k < 0.62) Prop(lane, Chance(0.4f) ? "pr_flower_w" : (Chance(0.5f) ? "pr_flower_y" : "pr_flower_p"), x, y, R(0.85f, 1.1f), Chance(0.5f), 6f);
+                else if (k < 0.62) Prop(lane, Chance(0.5f) ? "pr_rock_c" : "pr_rock_d", x, y, R(0.8f, 1.05f), Chance(0.5f), 6f);
                 else if (k < 0.74) Prop(lane, Chance(0.5f) ? "pr_fern_a" : "pr_fern_b", x, y, R(0.7f, 0.95f), Chance(0.5f), 3f);
                 else if (k < 0.82)
                 {
@@ -135,7 +135,8 @@ public static class World
                     var g = Art.New("fx_glow", m.transform, new Vector3(0, 0.25f, 0), m.sortingOrder + 1, "Default", true);
                     g.transform.localScale = Vector3.one * 1.3f; var pu = g.gameObject.AddComponent<Pulse>(); pu.baseColor = new Color(0.4f, 0.95f, 1f, 0.38f); pu.speed = R(1f, 2f); pu.phase = R(0, 6); pu.amount = 0.4f;
                 }
-                else if (k < 0.92) Prop(lane, "pr_rock_b", x, y, R(0.7f, 1f), Chance(0.5f));
+                else if (k < 0.89) Prop(lane, "pr_rock_b", x, y, R(0.7f, 1f), Chance(0.5f));
+                else if (k < 0.93) Prop(lane, "pr_chest", x, y, R(0.9f, 1.05f), Chance(0.5f));
                 else Prop(lane, "pr_bones", x, y, R(0.8f, 1f), Chance(0.5f));
             }
         }

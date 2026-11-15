@@ -87,18 +87,25 @@ public static class World
         }
         // --- back row: trunks, bushes, ruins ---
         var back = new GameObject("BackRow").transform; back.SetParent(root, false);
+        // Ground-line note (vakgpt art): bg_mid paints its own forest floor. The back of that floor
+        // — where the painted logs and rocks lie at the foot of the trunks — sits at about y = -1.3,
+        // and the bright open grass starts at about y = -2.4. The old procedural backdrop had ground
+        // much higher, so dressing authored for it (y = -0.7 .. -1.2) now hangs in mid-air over the
+        // painted trunks. Everything below is pinned to the painted floor instead.
+        // Large back-row props stay above MaxY (-1.3) so Art.YOrder keeps them behind the player
+        // rather than occluding them.
         string[] trunks = { "pr_trunk_a", "pr_trunk_b", "pr_trunk_c", "pr_trunk_b" };
         for (float x = -9; x < len; x += R(3.4f, 6.2f))
-            Prop(back, trunks[rng.Next(trunks.Length)], x, R(-1.05f, -0.72f), R(0.95f, 1.12f), Chance(0.5f));
+            Prop(back, trunks[rng.Next(trunks.Length)], x, R(-1.28f, -1.12f), R(0.95f, 1.12f), Chance(0.5f));
         // pr_bush_* dropped from the back-row dressing: the vakgpt bg_mid art already paints its
         // own bushes into the scene, so the old round procedural ones just floated on top of it.
         string[] bushes = { "pr_fern_a", "pr_fern_b" };
         for (float x = -9; x < len; x += R(1.6f, 3.4f))
-            Prop(back, bushes[rng.Next(bushes.Length)], x, R(-1.2f, -0.92f), R(0.9f, 1.15f), Chance(0.5f), 1.6f);
+            Prop(back, bushes[rng.Next(bushes.Length)], x, R(-1.52f, -1.30f), R(0.9f, 1.15f), Chance(0.5f), 1.6f);
         float[] ruinPillars = { 50.5f, 61f, 70.5f, 122f, 127f, 140.5f, -5.5f };
-        foreach (var x in ruinPillars) Prop(back, Chance(0.5f) ? "pr_pillar_tall" : "pr_pillar_mid", x, R(-1.12f, -0.95f));
+        foreach (var x in ruinPillars) Prop(back, Chance(0.5f) ? "pr_pillar_tall" : "pr_pillar_mid", x, R(-1.28f, -1.16f));
         float[] walls = { 56f, 66f, 132f, -8.5f, 143.5f, 145.5f };
-        foreach (var x in walls) Prop(back, "pr_wall", x, -1.02f, 1.1f, Chance(0.5f));
+        foreach (var x in walls) Prop(back, "pr_wall", x, -1.22f, 1.1f, Chance(0.5f));
         // dense edges so the level visibly begins and ends
         for (int i = 0; i < 4; i++) { Prop(back, trunks[i % 3], MinX - 2.2f - i * 0.5f, -1.3f - i * 0.75f, 1.15f); Prop(back, trunks[(i + 1) % 3], MaxX + 2.6f + i * 0.5f, -1.3f - i * 0.75f, 1.15f, true); }
         for (int i = 0; i < 5; i++) { Prop(back, "pr_fern_a", MinX - 1.6f, -1.5f - i * 0.6f, 1.1f, false, 1.5f); Prop(back, "pr_fern_a", MaxX + 1.9f, -1.5f - i * 0.6f, 1.1f, true, 1.5f); }
@@ -115,8 +122,8 @@ public static class World
         // --- lane dressing (no collision) ---
         for (float x = -3; x < MaxX + 3; x += R(0.5f, 1.3f))
         {
-            float y = Chance(0.5f) ? R(-2.05f, -1.36f) : R(-3.85f, -3.5f);
-            if (Chance(0.12f)) y = R(-3.4f, -2.2f);
+            float y = Chance(0.5f) ? R(-2.25f, -1.62f) : R(-3.85f, -3.5f);
+            if (Chance(0.12f)) y = R(-3.4f, -2.5f);
             double k = rng.NextDouble();
             if (k < 0.48) Prop(lane, Chance(0.5f) ? "pr_grass_a" : (Chance(0.5f) ? "pr_grass_b" : "pr_grass_c"), x, y, R(0.8f, 1.15f), Chance(0.5f), 5f);
             else if (k < 0.66) Prop(lane, Chance(0.4f) ? "pr_flower_w" : (Chance(0.5f) ? "pr_flower_y" : "pr_flower_p"), x, y, R(0.85f, 1.1f), Chance(0.5f), 6f);

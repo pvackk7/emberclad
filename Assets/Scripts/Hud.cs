@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.InputSystem;
 
 /// Screen-space HUD built in code: health, embers, prompts, title / death / victory screens.
 public class Hud : MonoBehaviour
@@ -216,20 +217,24 @@ public class Hud : MonoBehaviour
     void Update()
     {
         float dt = Time.unscaledDeltaTime; var p = game.player;
-        if (Input.GetKeyDown(KeyCode.F1)) { fpsOn = !fpsOn; fpsText.enabled = fpsOn; }
-        if (fpsOn)
-        {
-            fpsAccum += dt; fpsFrames++; if (dt > fpsWorst) fpsWorst = dt;
-            if (fpsAccum >= 0.25f)
-            {
-                float avg = fpsFrames / fpsAccum;
-                fpsText.text = string.Format("{0:0} fps   {1:0.0} ms   min {2:0}", avg, 1000f * fpsAccum / fpsFrames, 1f / Mathf.Max(fpsWorst, 0.0001f));
-                fpsText.color = avg >= 55 ? new Color(0.65f, 1f, 0.72f, 0.95f) : avg >= 30 ? new Color(1f, 0.88f, 0.5f, 0.95f) : new Color(1f, 0.55f, 0.5f, 0.95f);
-                fpsAccum = 0; fpsFrames = 0; fpsWorst = 0;
-            }
-        }
         // fade in
         if (fadeImg.color.a > 0) { var c = fadeImg.color; c.a = Mathf.MoveTowards(c.a, 0, dt * 1.6f); fadeImg.color = c; if (c.a <= 0) fade.gameObject.SetActive(false); }
+        if (fpsText != null)
+        {
+            var kb = Keyboard.current;
+            if (kb != null && kb.f1Key.wasPressedThisFrame) { fpsOn = !fpsOn; fpsText.enabled = fpsOn; }
+            if (fpsOn)
+            {
+                fpsAccum += dt; fpsFrames++; if (dt > fpsWorst) fpsWorst = dt;
+                if (fpsAccum >= 0.25f)
+                {
+                    float avg = fpsFrames / fpsAccum;
+                    fpsText.text = string.Format("{0:0} fps   {1:0.0} ms   min {2:0}", avg, 1000f * fpsAccum / fpsFrames, 1f / Mathf.Max(fpsWorst, 0.0001f));
+                    fpsText.color = avg >= 55 ? new Color(0.65f, 1f, 0.72f, 0.95f) : avg >= 30 ? new Color(1f, 0.88f, 0.5f, 0.95f) : new Color(1f, 0.55f, 0.5f, 0.95f);
+                    fpsAccum = 0; fpsFrames = 0; fpsWorst = 0;
+                }
+            }
+        }
         // health
         float hp = Mathf.Clamp01((float)p.hp / p.maxHp);
         hpShown = Mathf.Lerp(hpShown, hp, 1 - Mathf.Exp(-18 * dt)); trail = hp > trail ? hp : Mathf.MoveTowards(trail, hp, dt * 0.35f);

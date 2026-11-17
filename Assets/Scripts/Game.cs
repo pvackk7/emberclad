@@ -10,7 +10,7 @@ public class Game : MonoBehaviour
     public static Game I;
     public enum State { Title, Playing, Dead, Victory }
     public State state = State.Title;
-    public Player player; public Companion khalid; public Hud hud;
+    public Player player; public Companion khalid; public Hud hud; public EmbercladMenu menu;
     public int maxTokens = 2;
     public static int checkpoint; public static bool skipTitle; public static float runTime; public static int falls, runKills, runBestCombo;
 
@@ -49,10 +49,12 @@ public class Game : MonoBehaviour
         player = Player.Create(new Vector2(startX, -2.6f));
         khalid = Companion.Create(new Vector2(startX - 1.1f, -2.3f));
         hud = new GameObject("HUD").AddComponent<Hud>(); hud.Build(this);
+        menu = new GameObject("MenuUI", typeof(RectTransform)).AddComponent<EmbercladMenu>(); menu.Initialize(this);
         rig.SnapTo(startX + 1.4f);
         if (encIdx >= 3) maxTokens = 3;
-        if (skipTitle) { state = State.Playing; player.SkipIntro(); hud.HideTitle(true); }
-        else { state = State.Title; hud.ShowTitle(); }
+        hud.HideTitle(true);
+        if (skipTitle) { state = State.Playing; player.SkipIntro(); menu.Hide(); }
+        else { state = State.Title; hud.GetComponent<Canvas>().enabled = false; menu.ShowTitle(); }
     }
 
     public void HitStop(float d) { hitStop = Mathf.Max(hitStop, d); }
@@ -69,11 +71,11 @@ public class Game : MonoBehaviour
         switch (state)
         {
             case State.Title:
-                if (stateT > 0.6f && GameInput.Confirm) { state = State.Playing; stateT = 0; hud.HideTitle(false); player.Begin(); Sfx.Play("ui_start", 0.6f, 0); khalid.Cheer(1.2f); }
+                menu.Tick();
                 break;
             case State.Playing:
-                if (GameInput.Help) { paused = !paused; hud.ShowHelp(paused); }
-                if (paused) break;
+                if (!paused && GameInput.Help) { paused = true; menu.ShowPause(); break; }
+                if (paused) { menu.Tick(); break; }
                 runTime += Time.deltaTime;
                 TickEncounters();
                 break;
@@ -88,6 +90,25 @@ public class Game : MonoBehaviour
         {
             if (Random.value < Time.deltaTime * 26) Fx.Flames((Vector2)World.shrine.position + new Vector2(0, 2.35f), 1, 0.9f);
         }
+    }
+
+    public void BeginFromMenu()
+    {
+        if (state != State.Title) return;
+        state = State.Playing; stateT = 0;
+        menu.Hide(); hud.GetComponent<Canvas>().enabled = true;
+        player.Begin(); Sfx.Play("ui_start", 0.6f, 0); khalid.Cheer(1.2f);
+    }
+
+    public void ResumeFromMenu()
+    {
+        if (!paused) return;
+        paused = false; menu.Hide();
+    }
+
+    public void ReturnToMenu()
+    {
+        paused = false; menu.Hide(); Reload(false);
     }
 
     void Reload(bool skip)

@@ -9,11 +9,11 @@ public class Hud : MonoBehaviour
     Game game; Font font; RectTransform root;
     RectTransform hpFill, hpTrail, bossFill, bossPanel, goArrow, combo, promptPanel, titlePanel, deathPanel, victoryPanel, helpPanel, bannerRT, fade;
     Image[] embers = new Image[3]; Text comboText, bannerText, pressText, fpsText;
-    float fpsAccum, fpsWorst; int fpsFrames; bool fpsOn = true; Image fadeImg; CanvasGroup titleCg, promptCg, bannerCg, deathCg, victoryCg;
+    float fpsAccum, fpsWorst; int fpsFrames; bool fpsOn = false; Image fadeImg; CanvasGroup titleCg, promptCg, bannerCg, deathCg, victoryCg;
     float hpShown = 1, trail = 1, comboPunch, manaPulse, bannerT, bannerDur, goT, promptT; bool goOn, titleOn; int lastCombo, promptIdx = -1, shownPrompt = -1; Enemy boss; float bossShown = 1;
-    const float HpW = 340, BossW = 820;
+    const float HpW = 302, BossW = 820;
 
-    static readonly Color Dark = new Color(0.10f, 0.08f, 0.10f, 0.78f), Cream = new Color(0.98f, 0.94f, 0.84f, 1), Gold = new Color(1f, 0.82f, 0.42f, 1);
+    static readonly Color Dark = new Color(0.045f, 0.035f, 0.055f, 0.86f), Cream = new Color(0.89f, 0.83f, 0.75f, 1), Gold = new Color(0.94f, 0.76f, 0.53f, 1);
 
     class Prompt { public string[] keys; public string text; public System.Func<bool> start, done; }
     List<Prompt> prompts;
@@ -67,47 +67,41 @@ public class Hud : MonoBehaviour
         Vector2 TL = new Vector2(0, 1), TR = new Vector2(1, 1), BL = Vector2.zero, BC = new Vector2(0.5f, 0), TC = new Vector2(0.5f, 1), C = new Vector2(0.5f, 0.5f), RC = new Vector2(1, 0.5f);
 
         // --- player panel ---
-        var pp = Img("ui_round", root, TL, new Vector2(28, -28), new Vector2(560, 150), Dark, null, true).rectTransform;
-        Img("ui_round", pp, TL, new Vector2(14, -14), new Vector2(122, 122), new Color(0.32f, 0.2f, 0.16f, 1), null, true);
-        Img("k_head", pp, TL, new Vector2(18, -20), new Vector2(112, 107), Color.white);
-        Txt("KNIGHT", pp, TL, new Vector2(152, -12), new Vector2(200, 34), 24, Gold, TextAnchor.MiddleLeft);
-        Img("ui_round", pp, TL, new Vector2(150, -50), new Vector2(HpW + 12, 40), new Color(0.05f, 0.04f, 0.05f, 1), null, true);
-        hpTrail = Img("ui_white", pp, TL, new Vector2(156, -56), new Vector2(HpW, 28), new Color(1, 0.9f, 0.5f, 1)).rectTransform;
-        hpFill = Img("ui_white", pp, TL, new Vector2(156, -56), new Vector2(HpW, 28), new Color(0.9f, 0.27f, 0.25f, 1)).rectTransform;
-        Img("ui_white", pp, TL, new Vector2(156, -56), new Vector2(HpW, 9), new Color(1, 1, 1, 0.22f));
-        Img("ui_heart", pp, TL, new Vector2(136, -48), new Vector2(46, 44), Color.white);
-        for (int i = 0; i < 3; i++) embers[i] = Img("ui_ember", pp, TL, new Vector2(190 + i * 50, -94), new Vector2(46, 46), Color.white);
-        Txt("EMBERS", pp, TL, new Vector2(346, -100), new Vector2(160, 34), 20, new Color(1, 0.75f, 0.45f, 0.9f), TextAnchor.MiddleLeft);
+        var pp = Img("ui_round", root, TL, new Vector2(28, -28), new Vector2(515, 132), Dark, null, true).rectTransform;
+        Img("ui_round", pp, TL, new Vector2(14, -14), new Vector2(108, 104), new Color(0.2f, 0.13f, 0.14f, 1), null, true);
+        Img("k_head", pp, TL, new Vector2(20, -19), new Vector2(98, 92), Color.white);
+        Txt("KNIGHT", pp, TL, new Vector2(132, -13), new Vector2(200, 34), 24, Gold, TextAnchor.MiddleLeft);
+        Img("ui_round", pp, TL, new Vector2(132, -52), new Vector2(HpW + 12, 27), new Color(0.05f, 0.04f, 0.05f, 1), null, true);
+        hpTrail = Img("ui_white", pp, TL, new Vector2(138, -59), new Vector2(HpW, 15), new Color(1, 0.9f, 0.5f, 1)).rectTransform;
+        hpFill = Img("ui_white", pp, TL, new Vector2(138, -59), new Vector2(HpW, 15), new Color(0.9f, 0.27f, 0.25f, 1)).rectTransform;
+        Img("ui_white", pp, TL, new Vector2(138, -59), new Vector2(HpW, 4), new Color(1, 1, 1, 0.22f));
+        Img("ui_heart", pp, TL, new Vector2(113, -52), new Vector2(38, 36), Color.white);
+        for (int i = 0; i < 3; i++) embers[i] = Img("ui_ember", pp, TL, new Vector2(157 + i * 44, -91), new Vector2(40, 40), Color.white);
+        Txt("EMBERS", pp, TL, new Vector2(299, -93), new Vector2(155, 34), 20, new Color(1, 0.75f, 0.45f, 0.9f), TextAnchor.MiddleLeft);
         // Khalid tag
-        var kp = Img("ui_round", root, TL, new Vector2(28, -186), new Vector2(230, 70), Dark, null, true).rectTransform;
-        Img("p_head", kp, TL, new Vector2(8, -4), new Vector2(68, 62), Color.white);
-        Txt("Khalid", kp, TL, new Vector2(84, -16), new Vector2(140, 38), 26, Cream, TextAnchor.MiddleLeft);
+        var kp = Img("ui_round", root, TL, new Vector2(28, -171), new Vector2(212, 59), Dark, null, true).rectTransform;
+        Img("p_head", kp, TL, new Vector2(9, -4), new Vector2(57, 53), Color.white);
+        Txt("Khalid", kp, TL, new Vector2(71, -12), new Vector2(128, 36), 25, Cream, TextAnchor.MiddleLeft);
 
         // --- boss bar ---
         bossPanel = Rect("Boss", root, TC, new Vector2(0, -40), new Vector2(BossW + 40, 90));
-        Txt("THE BONE WARDEN", bossPanel, TC, new Vector2(0, 0), new Vector2(800, 40), 30, new Color(0.85f, 1f, 0.75f, 1));
+        Txt("THE BONE WARDEN", bossPanel, TC, new Vector2(0, 0), new Vector2(800, 40), 30, new Color(0.88f, 0.68f, 0.55f, 1));
         Img("ui_round", bossPanel, TC, new Vector2(0, -44), new Vector2(BossW + 12, 36), new Color(0.05f, 0.04f, 0.05f, 1), null, true);
-        bossFill = Img("ui_white", bossPanel, TC, new Vector2(-BossW / 2, -50), new Vector2(BossW, 24), new Color(0.55f, 0.85f, 0.4f, 1), new Vector2(0, 1)).rectTransform;
+        bossFill = Img("ui_white", bossPanel, TC, new Vector2(-BossW / 2, -50), new Vector2(BossW, 24), new Color(0.68f, 0.28f, 0.26f, 1), new Vector2(0, 1)).rectTransform;
         bossPanel.gameObject.SetActive(false);
 
         // --- combo counter ---
         combo = Rect("Combo", root, TR, new Vector2(-60, -220), new Vector2(400, 120));
-        fpsText = Txt("", root, TR, new Vector2(-14, -10), new Vector2(260, 30), 22, new Color(0.65f, 1f, 0.72f, 0.95f), TextAnchor.UpperRight, new Vector2(1, 1));
+        fpsText = Txt("", root, TR, new Vector2(-14, -10), new Vector2(260, 30), 22, new Color(0.75f, 0.71f, 0.66f, 0.85f), TextAnchor.UpperRight, new Vector2(1, 1));
         comboText = Txt("", combo, C, Vector2.zero, new Vector2(400, 120), 64, Gold, TextAnchor.MiddleRight);
         Txt("HITS", combo, C, new Vector2(0, -56), new Vector2(400, 40), 26, Cream, TextAnchor.MiddleRight);
         combo.gameObject.SetActive(false);
+        fpsText.enabled = false;
 
         // --- go arrow ---
         goArrow = Img("ui_arrow", root, RC, new Vector2(-70, 60), new Vector2(180, 120), Color.white).rectTransform;
         Txt("GO!", goArrow, C, new Vector2(-14, 4), new Vector2(160, 60), 40, new Color(0.25f, 0.14f, 0.1f), TextAnchor.MiddleCenter, null, false);
         goArrow.gameObject.SetActive(false);
-
-        // --- legend (always visible) ---
-        var lg = Img("ui_round", root, BL, new Vector2(24, 24), new Vector2(1010, 56), new Color(0.1f, 0.08f, 0.1f, 0.6f), null, true).rectTransform;
-        float lx = 16;
-        (string[], string)[] legend = { (new[] { "WASD" }, "Move"), (new[] { "SPACE" }, "Jump"), (new[] { "SHIFT" }, "Dodge"), (new[] { "J" }, "Attack"), (new[] { "K" }, "Heavy"), (new[] { "L" }, "Ember"), (new[] { "TAB" }, "Help") };
-        foreach (var (keys, label) in legend) lx += KeyRow(lg, new Vector2(0, 0.5f), new Vector2(lx, 0), keys, label, 0.56f, 22) + 20;
-        lg.sizeDelta = new Vector2(lx + 4, 56);
 
         // --- contextual prompt ---
         promptPanel = Img("ui_round", root, BC, new Vector2(0, 110), new Vector2(900, 104), Dark, null, true).rectTransform; promptCg = Group(promptPanel, 0);
@@ -238,7 +232,7 @@ public class Hud : MonoBehaviour
         // health
         float hp = Mathf.Clamp01((float)p.hp / p.maxHp);
         hpShown = Mathf.Lerp(hpShown, hp, 1 - Mathf.Exp(-18 * dt)); trail = hp > trail ? hp : Mathf.MoveTowards(trail, hp, dt * 0.35f);
-        hpFill.sizeDelta = new Vector2(HpW * hpShown, 28); hpTrail.sizeDelta = new Vector2(HpW * trail, 28);
+        hpFill.sizeDelta = new Vector2(HpW * hpShown, 15); hpTrail.sizeDelta = new Vector2(HpW * trail, 15);
         // embers
         manaPulse = Mathf.MoveTowards(manaPulse, 0, dt * 3);
         for (int i = 0; i < 3; i++)

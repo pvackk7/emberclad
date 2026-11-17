@@ -77,15 +77,21 @@ public static class Sfx
     static Dictionary<string, AudioClip> clips;
     static AudioSource[] pool; static int next;
     static AudioSource music, drums, amb;
+    static float musicBase = 0.32f, musicLevel = 1f, effectsLevel = 1f;
     public static float drumsTarget;
+    public static float MusicLevel => musicLevel;
+    public static float EffectsLevel => effectsLevel;
 
     public static void Init(GameObject host)
     {
+        musicLevel = Mathf.Clamp01(PlayerPrefs.GetFloat("Emberclad.MusicLevel", 1f));
+        effectsLevel = Mathf.Clamp01(PlayerPrefs.GetFloat("Emberclad.EffectsLevel", 1f));
+        musicBase = 0.32f;
         clips = new Dictionary<string, AudioClip>();
         foreach (var c in Resources.LoadAll<AudioClip>("Sfx")) clips[c.name] = c;
         pool = new AudioSource[14];
         for (int i = 0; i < pool.Length; i++) { pool[i] = host.AddComponent<AudioSource>(); pool[i].playOnAwake = false; }
-        music = Loop(host, "music", 0.32f); drums = Loop(host, "music_drums", 0f); amb = Loop(host, "ambience", 0.5f);
+        music = Loop(host, "music", musicBase * musicLevel); drums = Loop(host, "music_drums", 0f); amb = Loop(host, "ambience", 0.5f * musicLevel);
         drumsTarget = 0;
     }
 
@@ -100,18 +106,34 @@ public static class Sfx
     public static void Tick(float dt)
     {
         if (drums == null) return;
-        drums.volume = Mathf.MoveTowards(drums.volume, drumsTarget, dt * 0.5f);
+        music.volume = musicBase * musicLevel;
+        if (amb != null) amb.volume = 0.5f * musicLevel;
+        drums.volume = Mathf.MoveTowards(drums.volume, drumsTarget * musicLevel, dt * 0.5f);
         if (music.isPlaying && drums.isPlaying && Mathf.Abs(music.timeSamples - drums.timeSamples) > 2000) drums.timeSamples = music.timeSamples;
     }
 
-    public static void MusicVolume(float v) { if (music != null) music.volume = v; }
+    public static void MusicVolume(float v) { musicBase = Mathf.Clamp01(v); if (music != null) music.volume = musicBase * musicLevel; }
+
+    public static void SetMusicLevel(float v)
+    {
+        musicLevel = Mathf.Clamp01(v);
+        PlayerPrefs.SetFloat("Emberclad.MusicLevel", musicLevel);
+        if (music != null) music.volume = musicBase * musicLevel;
+        if (amb != null) amb.volume = 0.5f * musicLevel;
+    }
+
+    public static void SetEffectsLevel(float v)
+    {
+        effectsLevel = Mathf.Clamp01(v);
+        PlayerPrefs.SetFloat("Emberclad.EffectsLevel", effectsLevel);
+    }
 
     public static void Play(string name, float vol = 1f, float pitchVar = 0.08f, float pitch = 1f)
     {
         if (clips == null || !clips.TryGetValue(name, out var c)) return;
         var a = pool[next]; next = (next + 1) % pool.Length;
         a.pitch = pitch + Random.Range(-pitchVar, pitchVar);
-        a.volume = vol;
+        a.volume = vol * effectsLevel;
         a.clip = c; a.Play();
     }
 }
@@ -159,7 +181,7 @@ public static class GameInput
     public static bool Dodge => current.Contains("dodge") || K(k => k.leftShiftKey.wasPressedThisFrame || k.rightShiftKey.wasPressedThisFrame) || G(g => g.rightShoulder.wasPressedThisFrame);
     public static bool Restart => current.Contains("restart") || K(k => k.rKey.wasPressedThisFrame) || G(g => g.startButton.wasPressedThisFrame);
     public static bool Confirm => current.Contains("confirm") || K(k => k.enterKey.wasPressedThisFrame || k.spaceKey.wasPressedThisFrame || k.jKey.wasPressedThisFrame) || M(m => m.leftButton.wasPressedThisFrame) || G(g => g.buttonSouth.wasPressedThisFrame || g.startButton.wasPressedThisFrame);
-    public static bool Help => current.Contains("help") || K(k => k.tabKey.wasPressedThisFrame || k.hKey.wasPressedThisFrame || k.pKey.wasPressedThisFrame);
+    public static bool Help => current.Contains("help") || K(k => k.tabKey.wasPressedThisFrame || k.hKey.wasPressedThisFrame || k.pKey.wasPressedThisFrame || k.escapeKey.wasPressedThisFrame);
 }
 
 /// Pooled sprite particles: sparks, dust, bones, flames, leaves, glows.

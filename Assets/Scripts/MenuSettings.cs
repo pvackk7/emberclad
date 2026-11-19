@@ -62,8 +62,9 @@ public static class MenuSettings
     public static Key Binding(int i) { EnsureLoaded(); return bindings[i]; }
 
     static KeyControl Control(int i) { var kb = Keyboard.current; return kb == null ? null : kb[Binding(i)]; }
-    public static bool Held(int i) { var c = Control(i); return c != null && c.isPressed; }
-    public static bool Pressed(int i) { var c = Control(i); return c != null && c.wasPressedThisFrame; }
+    // The on-screen touch buttons (TouchControls) report through the same action numbers.
+    public static bool Held(int i) { var c = Control(i); return (c != null && c.isPressed) || TouchControls.Held(i); }
+    public static bool Pressed(int i) { var c = Control(i); return (c != null && c.wasPressedThisFrame) || TouchControls.Pressed(i); }
 
     /// Binds action i to key; whichever action already had that key takes i's old one.
     public static void Bind(int i, Key key)

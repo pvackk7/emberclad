@@ -10,7 +10,7 @@ using UnityEngine.UI;
 /// throws a fountain. The size of the spray is the readout.
 public partial class Hud
 {
-    RectTransform cinderPlate, coinLayer;
+    RectTransform cinderPlate, coinLayer, cinderCoin;
     static readonly Vector2 PlateSize = new Vector2(212, 60);
     // Coin icon centre, relative to the plate's bottom-right corner. The burst
     // aims here too, so the spray lands on the icon rather than beside it.
@@ -37,7 +37,7 @@ public partial class Hud
         // The icon says what the number is; a caption would only repeat it.
         cinderPlate = FramedPanel("Cinders", root, BR, new Vector2(-34, 34), PlateSize);
         cinderPlate.pivot = BR;
-        Img("ui_coin", cinderPlate, BR, CoinSlot, new Vector2(40, 40), Color.white, new Vector2(0.5f, 0.5f));
+        cinderCoin = Img("ui_coin", cinderPlate, BR, CoinSlot, new Vector2(44, 44), Color.white, new Vector2(0.5f, 0.5f)).rectTransform;
         cinderText = Txt("0", cinderPlate, BR, new Vector2(-20, PlateSize.y / 2), new Vector2(140, 40), 32, Gold, TextAnchor.MiddleRight, new Vector2(1, 0.5f));
     }
 
@@ -61,8 +61,8 @@ public partial class Hud
         Vector2 screen = cam.WorldToScreenPoint(worldPos);
         Vector2 from;
         if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(root, screen, null, out from)) return;
-        Vector2 to = cinderPlate.anchoredPosition + CoinSlot
-                   + new Vector2(root.rect.width / 2, -root.rect.height / 2);
+        // Straight at the plate's coin, wherever the plate sits (it moves to the top on touch screens).
+        Vector2 to = root.InverseTransformPoint(cinderCoin.position);
 
         int n = Mathf.Clamp(Mathf.RoundToInt(5 + amount * .5f), 5, 40);
         float spread = 95f + weight * 190f;     // how wide the spray throws

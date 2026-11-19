@@ -53,6 +53,9 @@ public static class QuickItems
         return best;
     }
 
+    /// Equip a slot directly: the touch layout's tappable wells.
+    public static void Select(int slot) { if (slot >= 0 && slot < Filled) { Selected = slot; Selecting = false; Hovered = -1; } }
+
     public static void Tick(Game game)
     {
         released = false;

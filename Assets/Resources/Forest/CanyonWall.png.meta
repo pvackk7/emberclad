@@ -1,7 +1,10 @@
 fileFormatVersion: 2
 guid: 53d2975b7f3eb4fcea70775c06437263
 TextureImporter:
-  internalIDToNameTable: []
+  internalIDToNameTable:
+  - first:
+      213: 8355980241318583395
+    second: CanyonWall_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -56,7 +59,7 @@ TextureImporter:
   spriteTessellationMethod: 0
   spriteTessellationDetail: -1
   spriteGeometrySubdivision: -1
-  textureType: 0
+  textureType: 8
   textureShape: 1
   singleChannelComponent: 0
   flipbookRows: 1
@@ -74,7 +77,7 @@ TextureImporter:
     maxTextureSize: 2048
     resizeAlgorithm: 0
     textureFormat: -1
-    textureCompression: 2
+    textureCompression: 1
     compressionQuality: 50
     crunchedCompression: 0
     allowsAlphaSplitting: 0
@@ -97,7 +100,29 @@ TextureImporter:
     forceMaximumCompressionQuality_BC6H_BC7: 0
   spriteSheet:
     serializedVersion: 2
-    sprites: []
+    sprites:
+    - serializedVersion: 2
+      name: CanyonWall_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 6
+        width: 2172
+        height: 718
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 36c1af1f1c766f370800000000000000
+      internalID: 8355980241318583395
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
     outline: []
     customData: 
     physicsShape: []
@@ -111,7 +136,8 @@ TextureImporter:
     secondaryTextures: []
     spriteCustomMetadata:
       entries: []
-    nameFileIdTable: {}
+    nameFileIdTable:
+      CanyonWall_0: 8355980241318583395
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

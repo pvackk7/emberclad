@@ -29,8 +29,8 @@ public partial class Hud
         promptBase = local;
         if (promptLabel.text != label) promptLabel.text = label;
         // Read the binding live, so a player who rebinds Interact sees their key.
-        string key = MenuSettings.Binding(12).ToString().ToUpperInvariant();
-        if (promptKeyText.text != key) promptKeyText.text = key;
+        string key = TouchControls.Enabled ? "TAP" : MenuSettings.Binding(12).ToString().ToUpperInvariant();
+        if (promptKeyText.text != key) { promptKeyText.text = key; promptKeyText.fontSize = key.Length > 2 ? 17 : 27; }
         promptFrame = Time.frameCount;
     }
 
@@ -38,7 +38,8 @@ public partial class Hud
     {
         if (promptRT == null) return;
         // One frame of slack: the pickup's Update and this one are not ordered.
-        bool on = Time.frameCount - promptFrame <= 1;
+        // Never over the death/victory screens, the first-steps panel or the pause menu.
+        bool on = game != null && game.state == Game.State.Playing && !IntroOpen && !PauseMenuOpen && Time.frameCount - promptFrame <= 1;
         promptFade = Mathf.MoveTowards(promptFade, on ? 1f : 0f, dt * 8f);
         promptCg.alpha = promptFade;
         if (promptFade <= 0f) return;

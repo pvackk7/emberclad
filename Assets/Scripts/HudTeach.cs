@@ -13,6 +13,19 @@ public partial class Hud
     RectTransform teachCard;
     CanvasGroup teachCg;
     float teachT, teachDur;
+    // Where the card comes to rest, and how far below that it starts.
+    const float TeachY = 152f, TeachRise = 72f;
+    // One width for every lesson, so cards do not change shape between rounds, and
+    // one margin that the heading, the rows and the body all line up against.
+    const float CardW = 520f, CardPad = 30f;
+    const float MaxTeachSeconds = 30f;
+
+    /// The lesson's condition was met: let the card leave now (its usual lift-and-fade) instead of
+    /// sitting out the rest of its timer.
+    public void DismissTeach() { if (teachCard != null) teachT = Mathf.Min(teachT, .4f); }
+
+    /// Death, victory or a scene change: the card goes at once.
+    public void ClearTeach() { if (teachCard != null) { Destroy(teachCard.gameObject); teachCard = null; } }
 
     /// keys/labels are parallel: each pair becomes one row of key caps and a caption.
     /// Key names are the defaults KeyRow understands, so they re-map to whatever the
@@ -20,34 +33,41 @@ public partial class Hud
     public void TeachCard(string title, string body, string[] keys, string[] captions, float dur = 7f)
     {
         if (root == null) return;
+        if (game != null && game.state != Game.State.Playing) return;   // never over the death or victory screen
         if (teachCard != null) Destroy(teachCard.gameObject);
+        if (TouchControls.Enabled) TouchLesson(ref keys, ref captions);
+        // Hard ceiling on any card's life, whatever the caller asked for.
+        dur = Mathf.Clamp(dur, 1f, MaxTeachSeconds);
 
         int rows = keys == null ? 0 : keys.Length;
-        float height = 92f + rows * 44f + (string.IsNullOrEmpty(body) ? 0f : 44f);
         Vector2 BC = new Vector2(.5f, 0), TL = new Vector2(0, 1), TC = new Vector2(.5f, 1);
 
-        teachCard = Rect("Lesson", root, BC, new Vector2(0, 152), new Vector2(780, height), BC);
+        // Height is settled at the end, once the body has been measured. Everything
+        // inside hangs off the top edge, so growing the card downward cannot shift
+        // any of it.
+        teachCard = Rect("Lesson", root, BC, new Vector2(0, TeachY - TeachRise), new Vector2(CardW, 10f), BC);
         teachCg = Group(teachCard, 0f);
-        // Rounded and soft rather than the hard-edged stone plate the menus use: this
-        // thing sits over the fight, so it should feel like a card laid down on top of
-        // the scene instead of a slab cut out of it.
-        Vector2 C = new Vector2(.5f, .5f);
-        Img("ui_round", teachCard, C, new Vector2(0, -7), new Vector2(788, height + 6), new Color(0f, 0f, 0f, .30f), C, true);
-        Img("ui_round", teachCard, C, Vector2.zero, new Vector2(780, height), new Color(.52f, .40f, .28f, .62f), C, true);
-        Img("ui_round", teachCard, C, Vector2.zero, new Vector2(770, height - 10), new Color(.072f, .058f, .070f, .95f), C, true);
-        Img("ui_round", teachCard, C, new Vector2(0, (height - 10) * .25f), new Vector2(758, (height - 10) * .5f), new Color(.19f, .15f, .17f, .40f), C, true);
 
-        var heading = Txt(title.ToUpperInvariant(), teachCard, TC, new Vector2(0, -18), new Vector2(720, 40), 30, Gold, TextAnchor.MiddleCenter, TC);
+        // Drawn with the plate every other panel uses rather than a nine-sliced
+        // sprite stretched to fit: the sprite's corners scaled with the card and
+        // turned it into a lozenge, which is why a lesson never looked like it came
+        // from the same game as the screen that introduced it.
+        var plate = Full("Plate", teachCard);
+        plate.gameObject.AddComponent<MenuPlateGraphic>().raycastTarget = false;
+
+        var heading = Txt(title.ToUpperInvariant(), teachCard, TC, new Vector2(0, -18), new Vector2(CardW - CardPad * 2, 40), 29, Gold, TextAnchor.MiddleCenter, TC);
         if (menuTitleFont != null) heading.font = menuTitleFont;
 
-        float y = -70f;
-        for (int i = 0; i < rows; i++)
+        // Keys only: the explanations were cut (the user found them unnecessary). The body
+        // parameter is kept so callers compile, but nothing is drawn for it.
+        float y = -64f;
+        if (rows > 0)
         {
-            KeyRow(teachCard, TL, new Vector2(62, y), new[] { keys[i] }, captions[i], .62f, 23);
-            y -= 44f;
+            var rowKeys = new string[rows][];
+            for (int i = 0; i < rows; i++) rowKeys[i] = new[] { keys[i] };
+            y -= KeyBlock(teachCard, y, rowKeys, captions);
         }
-        if (!string.IsNullOrEmpty(body))
-            Txt(body, teachCard, TC, new Vector2(0, y - 6), new Vector2(712, 42), 21, Cream, TextAnchor.MiddleCenter, TC);
+        teachCard.sizeDelta = new Vector2(CardW, -y + 18f);
 
         teachT = teachDur = dur;
         Sfx.Play("mana", .42f, 0, 1.35f);
@@ -56,13 +76,22 @@ public partial class Hud
     void TickTeach(float dt)
     {
         if (teachCard == null) return;
+        if (game != null && game.state != Game.State.Playing) { ClearTeach(); return; }
         teachT -= dt;
-        float gone = 1f - Mathf.Clamp01(teachT / teachDur);
-        // Snap on, hold, drift off. The fade-out is the slower half so it never
-        // vanishes mid-read.
-        teachCg.alpha = Mathf.Clamp01(Mathf.Min(gone * 6f, teachT * 1.6f));
-        float pop = 1f + Mathf.Max(0f, .10f - gone * 1.2f);
-        teachCard.localScale = new Vector3(pop, pop, 1);
+        float age = teachDur - teachT;
+
+        // Flies up into place rather than developing out of nothing. Cubic ease-out
+        // covers most of the distance in the first tenth of a second and then settles,
+        // which is what makes it read as arriving. The old fade took six sevenths of a
+        // second just to reach full opacity.
+        float rise = 1f - Mathf.Pow(1f - Mathf.Clamp01(age / .32f), 3f);
+        float fadeIn = Mathf.Clamp01(age / .15f);
+        float fadeOut = Mathf.Clamp01(teachT / .40f);
+
+        teachCg.alpha = Mathf.Min(fadeIn, fadeOut);
+        // Keeps lifting on the way out, so it leaves the way it came in.
+        teachCard.anchoredPosition = new Vector2(0, TeachY - TeachRise * (1f - rise) + (1f - fadeOut) * 30f);
+
         if (teachT <= 0f) { Destroy(teachCard.gameObject); teachCard = null; }
     }
 }

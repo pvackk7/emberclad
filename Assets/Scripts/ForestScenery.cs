@@ -1,311 +1,395 @@
-using System;
 using System.Collections.Generic;
 using UnityEngine;
 
+[DefaultExecutionOrder(205)]
 public sealed class ForestScenery : MonoBehaviour
 {
-    readonly List<Mesh> meshes = new List<Mesh>();
-    Material material;
-    static Color C(string hex) { ColorUtility.TryParseHtmlString("#" + hex, out var c); return QualitySettings.activeColorSpace == ColorSpace.Linear ? c.linear : c; }
+    readonly List<Object> owned = new List<Object>();
+    readonly List<MovingPlane> planes = new List<MovingPlane>();
+    readonly List<MovingSprig> sprigs = new List<MovingSprig>();
+    readonly List<Lamp> lamps = new List<Lamp>();
+    readonly List<Mote> motes = new List<Mote>();
+    Material paper, bark, treePaint, stone, path, grass, moonPaint;
+    Sprite[] trees, details;
+    Transform sky, forest, near, front;
+    EndCampfire campfire;
+    static readonly int Wick = Shader.PropertyToID("_ForestWick");
+    static readonly int Pool = Shader.PropertyToID("_ForestPool");
 
-    sealed class Ink
+    struct MovingPlane { public Transform root; public float parallax, mist; public bool sky; }
+    struct MovingSprig { public Transform root; public float angle, speed, phase, amplitude; }
+    struct Lamp { public Transform wick; public Mesh flame; public float phase; }
+    struct Mote { public SpriteRenderer sprite; public Vector3 home; public float phase; }
+    readonly Vector3[] flamePoints = new Vector3[14];
+
+    static Color Ink(byte r, byte g, byte b, float a = 1)
     {
-        public readonly List<Vector3> vertices = new List<Vector3>();
-        public readonly List<int> indices = new List<int>();
-        public readonly List<Color> colors = new List<Color>();
-
-        public void Poly(Color c, params Vector2[] p)
-        {
-            int start = vertices.Count;
-            foreach (var v in p) { vertices.Add(v); colors.Add(c); }
-            var ring = new List<int>();
-            float area = 0;
-            for (int i = 0; i < p.Length; i++) { ring.Add(i); var b = p[(i + 1) % p.Length]; area += p[i].x * b.y - b.x * p[i].y; }
-            if (area < 0) ring.Reverse();
-            int guard = p.Length * p.Length;
-            while (ring.Count > 2 && guard-- > 0)
-            {
-                bool cut = false;
-                for (int j = 0; j < ring.Count; j++)
-                {
-                    int a = ring[(j + ring.Count - 1) % ring.Count], b = ring[j], d = ring[(j + 1) % ring.Count];
-                    if (Cross(p[b] - p[a], p[d] - p[b]) <= .000001f) continue;
-                    bool inside = false;
-                    foreach (int k in ring)
-                    {
-                        if (k == a || k == b || k == d) continue;
-                        if (Cross(p[b] - p[a], p[k] - p[a]) >= 0 && Cross(p[d] - p[b], p[k] - p[b]) >= 0 && Cross(p[a] - p[d], p[k] - p[d]) >= 0) { inside = true; break; }
-                    }
-                    if (inside) continue;
-                    indices.Add(start + a); indices.Add(start + b); indices.Add(start + d); ring.RemoveAt(j); cut = true; break;
-                }
-                if (!cut) break;
-            }
-        }
-        static float Cross(Vector2 a, Vector2 b) { return a.x * b.y - a.y * b.x; }
-        public void Stroke(Color c, float width, params Vector2[] p)
-        {
-            for (int i = 1; i < p.Length; i++)
-            {
-                Vector2 n = new Vector2(-(p[i] - p[i - 1]).y, (p[i] - p[i - 1]).x).normalized * width * .5f;
-                Poly(c, p[i - 1] + n, p[i - 1] - n, p[i] - n, p[i] + n);
-            }
-        }
-        public void Oval(Color c, float x, float y, float w, float h, int count = 18)
-        {
-            var p = new Vector2[count];
-            for (int i = 0; i < count; i++) { float a = i * Mathf.PI * 2 / count; p[i] = new Vector2(x + Mathf.Cos(a) * w, y + Mathf.Sin(a) * h); }
-            Poly(c, p);
-        }
-        public void Gradient(Color top, Color bottom, float yTop, float yBottom)
-        {
-            int start = vertices.Count;
-            vertices.Add(new Vector3(-35, yTop)); vertices.Add(new Vector3(-35, yBottom));
-            vertices.Add(new Vector3(180, yBottom)); vertices.Add(new Vector3(180, yTop));
-            colors.Add(top); colors.Add(bottom); colors.Add(bottom); colors.Add(top);
-            indices.AddRange(new[] { start, start + 1, start + 2, start, start + 2, start + 3 });
-        }
-        public void Band(Color color, Func<float, float> top, Func<float, float> bottom, float from = -35, float to = 180)
-        {
-            for (float x = from; x < to; x += .4f)
-            {
-                float end = Mathf.Min(to, x + .4f);
-                Poly(color, new Vector2(x, top(x)), new Vector2(x, bottom(x)), new Vector2(end, bottom(end)), new Vector2(end, top(end)));
-            }
-        }
+        Color c = new Color32(r, g, b, 255);
+        if (QualitySettings.activeColorSpace == ColorSpace.Linear) c = c.linear;
+        c.a = a;
+        return c;
     }
 
-    void Finish(string name, Ink ink, int order, float parallax = 0, string layer = "Background")
+    T Keep<T>(T asset) where T : Object { owned.Add(asset); return asset; }
+
+    Material Paint(string resource = null, bool receivesLight = false)
     {
-        var go = new GameObject(name); go.transform.SetParent(transform, false);
-        var mesh = new Mesh { name = name };
-        mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
-        mesh.SetVertices(ink.vertices); mesh.SetColors(ink.colors); mesh.SetTriangles(ink.indices, 0); mesh.RecalculateBounds(); meshes.Add(mesh);
-        go.AddComponent<MeshFilter>().sharedMesh = mesh;
-        var renderer = go.AddComponent<MeshRenderer>(); renderer.sharedMaterial = material; renderer.sortingLayerName = layer; renderer.sortingOrder = order;
-        if (parallax > 0) { var p = go.AddComponent<Parallax>(); p.factor = parallax; }
+        var paint = Keep(new Material(Resources.Load<Shader>("Shaders/ForestInk")));
+        paint.SetColor("_RendererColor", Color.white);
+        paint.SetFloat("_Lamplit", receivesLight ? 1 : 0);
+        if (resource != null) paint.mainTexture = Resources.Load<Texture2D>(resource);
+        return paint;
     }
 
     public static void Build(Transform parent)
     {
-        var go = new GameObject("The Hollow Wood"); go.transform.SetParent(parent, false);
-        go.AddComponent<ForestScenery>().Draw();
+        var root = new GameObject("Ancient forest path");
+        root.transform.SetParent(parent, false);
+        root.AddComponent<ForestScenery>().Illustrate();
     }
 
-    void Limb(Ink ink, Vector2 start, Vector2 control, Vector2 end, float baseWidth, Color bark, Color light, Color edge, bool outline)
+    Transform Plane(string name, float parallax, bool night = false, float mist = 0)
     {
-        const int steps = 14;
-        var left = new Vector2[steps + 1];
-        var right = new Vector2[steps + 1];
-        for (int i = 0; i <= steps; i++)
-        {
-            float t = i / (float)steps;
-            Vector2 c = (1 - t) * (1 - t) * start + 2 * (1 - t) * t * control + t * t * end;
-            Vector2 tangent = ((1 - t) * (control - start) + t * (end - control)).normalized;
-            Vector2 n = new Vector2(-tangent.y, tangent.x);
-            float w = baseWidth * Mathf.Lerp(1, .08f, t);
-            left[i] = c + n * w; right[i] = c - n * w;
-        }
-        var shape = new Vector2[(steps + 1) * 2];
-        for (int i = 0; i <= steps; i++) { shape[i] = left[i]; shape[steps + 1 + i] = right[steps - i]; }
-        ink.Poly(bark, shape);
-        if (outline) { ink.Stroke(edge, .035f, left); ink.Stroke(edge, .035f, right); }
-        for (int i = 0; i < steps; i++)
-            ink.Poly(light, left[i], left[i + 1], Vector2.Lerp(left[i + 1], right[i + 1], .20f), Vector2.Lerp(left[i], right[i], .20f));
+        var root = new GameObject(name).transform;
+        root.SetParent(transform, false);
+        planes.Add(new MovingPlane { root = root, parallax = parallax, sky = night, mist = mist });
+        return root;
     }
 
-    void Leaves(Ink ink, float x, float y, float w, float h, int seed, Color foliage, Color light, Color edge, bool outline)
+    Sprite[] CutSheet(string name, RectInt[] cells)
     {
-        var crown = new Vector2[54];
-        for (int j = 0; j < crown.Length; j++)
+        var tex = Resources.Load<Texture2D>("Forest/" + name);
+        var result = new Sprite[cells.Length];
+        for (int i = 0; i < cells.Length; i++)
         {
-            float a = j * Mathf.PI * 2 / crown.Length;
-            float r = 1 + .12f * Mathf.Sin(a * 5 + seed) + .07f * Mathf.Sin(a * 9 + seed * .7f);
-            crown[j] = new Vector2(x + Mathf.Cos(a) * w * r, y + Mathf.Sin(a) * h * r);
+            var c = cells[i];
+            var rect = new Rect(c.x * tex.width / 1536f, (1024 - c.yMax) * tex.height / 1024f,
+                c.width * tex.width / 1536f, c.height * tex.height / 1024f);
+            Vector2 pivot = name == "TrailDetails" && i == 0 ? new Vector2(.035f,.52f) : new Vector2(.5f,0);
+            result[i] = Keep(Sprite.Create(tex, rect, pivot, 100, 0, SpriteMeshType.FullRect));
+            result[i].name = name + " " + i;
         }
-        ink.Poly(foliage, crown);
-        if (outline) { var closed = new List<Vector2>(crown); closed.Add(crown[0]); ink.Stroke(edge, .038f, closed.ToArray()); }
-        var cap = new Vector2[30];
-        for (int j = 0; j < 19; j++)
-        {
-            float a = .12f + j * (Mathf.PI - .24f) / 18;
-            float r = 1 + .12f * Mathf.Sin(a * 5 + seed) + .07f * Mathf.Sin(a * 9 + seed * .7f);
-            cap[j] = new Vector2(x + Mathf.Cos(a) * w * r * .91f, y + Mathf.Sin(a) * h * r * .88f);
-        }
-        for (int j = 0; j < 11; j++)
-        {
-            float t = j / 10f;
-            cap[j + 19] = new Vector2(x + Mathf.Lerp(-.88f, .88f, t) * w, y + (.03f + .12f * Mathf.Sin(t * 17 + seed)) * h);
-        }
-        ink.Poly(Color.Lerp(foliage, light, outline ? .34f : .16f), cap);
-        if (!outline) return;
-        for (int j = 0; j < 3; j++)
-        {
-            float xx = x + (j - 1) * w * .42f, yy = y + h * (.20f + .1f * Mathf.Sin(seed + j));
-            ink.Stroke(Color.Lerp(foliage, light, .48f), .035f,
-                new Vector2(xx - .13f, yy), new Vector2(xx - .06f, yy + .055f), new Vector2(xx + .02f, yy + .035f), new Vector2(xx + .1f, yy + .09f));
-        }
+        return result;
     }
 
-    void Tree(Ink ink, float x, float y, float height, float width, int seed, Color bark, Color light, Color foliage, bool outline)
+    SpriteRenderer Place(string name, Sprite sprite, Transform plane, float x, float y, float height,
+        int order, Color color, bool facingLeft = false, string layer = "Background")
     {
-        float bend = Mathf.Sin(seed * 3.7f) * height * .14f;
-        Color edge = outline ? C("090d16") : bark;
-        Vector2 foot = new Vector2(x, y), tip = new Vector2(x + bend, y + height);
-        Limb(ink, foot, new Vector2(x - bend * .5f, y + height * .54f), tip, width * .85f, bark, light, edge, outline);
-        for (int j = 0; j < 3; j++)
+        var obj = new GameObject(name);
+        var t = obj.transform;
+        t.SetParent(plane, false);
+        t.localPosition = World.Project(new Vector2(x,y));
+        float scale = height / sprite.bounds.size.y;
+        t.localScale = new Vector3(facingLeft ? -scale : scale, scale, 1);
+        var sr = obj.AddComponent<SpriteRenderer>();
+        sr.sprite = sprite; sr.sharedMaterial = bark; sr.sortingLayerName = layer; sr.sortingOrder = order; sr.color = color;
+        return sr;
+    }
+
+    Mesh Surface(string name, Transform plane, Material mat, int order, Vector3[] v, Vector2[] uv, Color[] colors, int[] triangles,
+        string layer = "Background")
+    {
+        var mesh = Keep(new Mesh { name = name });
+        mesh.vertices = v; mesh.colors = colors;
+        if (uv != null) mesh.uv = uv;
+        mesh.triangles = triangles; mesh.RecalculateBounds();
+        var go = new GameObject(name); go.transform.SetParent(plane,false);
+        go.AddComponent<MeshFilter>().sharedMesh = mesh;
+        var sr = go.AddComponent<MeshRenderer>(); sr.sharedMaterial = mat; sr.sortingLayerName = layer; sr.sortingOrder = order;
+        return mesh;
+    }
+
+    void Illustrate()
+    {
+        paper = Paint();
+        bark = Paint(null, true);
+        treePaint = Paint("Forest/AncientTrees", true);
+        stone = Paint("Forest/CanyonWall");
+        path = Paint("Forest/ForestFloor", true);
+        grass = Paint("Forest/ForestFloor", true);
+        grass.SetFloat("_GrassOnly", 1);
+        moonPaint = Paint("Menu/TitleBackground"); moonPaint.SetFloat("_Moon", 1);
+        trees = CutSheet("AncientTrees", new[] {
+            new RectInt(2,2,507,496),new RectInt(515,1,507,493),new RectInt(1027,6,507,489),
+            new RectInt(2,512,508,509),new RectInt(514,512,507,506) });
+        details = CutSheet("TrailDetails", new[] {
+            new RectInt(9,108,503,294),new RectInt(532,146,477,329),new RectInt(1149,6,305,493),
+            new RectInt(8,752,498,238),new RectInt(575,515,343,484),new RectInt(1025,686,506,297) });
+        sky = Plane("Night beyond the canopy", .994f, true);
+        forest = Plane("Wooded canyon wall", .135f);
+        near = Plane("Roots and ruins", 0);
+        front = Plane("Near lip of the trail", -.018f);
+        Night();
+        Ribbon(GroundPart.Cliff);
+        Ribbon(GroundPart.Bank);
+        Ribbon(GroundPart.Trail);
+        Opening();
+    }
+
+    void Night()
+    {
+        Surface("Blue hour",sky,paper,-100,new[]{new Vector3(-100,-8),new Vector3(100,-8),new Vector3(100,8),new Vector3(-100,8)},
+            null,new[]{Ink(43,73,86),Ink(43,73,86),Ink(12,17,37),Ink(12,17,37)},new[]{0,1,2,0,2,3});
+        var vertices = new List<Vector3>(); var colors = new List<Color>(); var indices = new List<int>();
+        var random = new System.Random(2815);
+        for (int i = 0; i < 380; i++)
         {
-            float side = j % 2 == 0 ? -1 : 1;
-            Vector2 root = foot + new Vector2(side * width * (1.7f + .35f * j), -.035f + .025f * j);
-            Limb(ink, foot + Vector2.up * (.36f + .1f * j), foot + new Vector2(side * width * .5f, .02f), root, width * .27f, bark, light, edge, outline);
+            float x = (float)random.NextDouble() * 92 - 45, y = (float)random.NextDouble() * 7.5f - 1;
+            float r = .007f + (float)random.NextDouble() * .011f;
+            Color c = Ink(164,204,216,.28f + (float)random.NextDouble() * .39f);
+            int k = vertices.Count;
+            vertices.Add(new Vector2(x-r,y)); vertices.Add(new Vector2(x,y+r*1.22f));
+            vertices.Add(new Vector2(x+r,y)); vertices.Add(new Vector2(x,y-r*1.22f));
+            for(int j=0;j<4;j++) colors.Add(c);
+            indices.AddRange(new[]{k,k+1,k+2,k,k+2,k+3});
         }
-        for (int j = 0; j < 4; j++)
+        Surface("Distant stars",sky,paper,-99,vertices.ToArray(),null,colors.ToArray(),indices.ToArray());
+        Vector2 center = new Vector2(2.42f,2.64f);
+        Disc("Moonlit air",center,new[]{.05f,.83f,1.12f,1.52f,2.0f},new[]{.25f,.20f,.09f,.024f,0},false);
+        Disc("Cratered moon",center,new[]{.025f,.79f,.875f,.916f,.95f},new[]{1f,1f,1f,.78f,0},true);
+    }
+
+    void Disc(string name, Vector2 center, float[] rings, float[] alpha, bool lunar)
+    {
+        const int slices = 64;
+        var v = new Vector3[rings.Length*slices+1]; var uv = new Vector2[v.Length]; var c = new Color[v.Length];
+        var tri = new List<int>(); var texture = moonPaint.mainTexture;
+        Vector2 texel = new Vector2(1f/texture.width,1f/texture.height);
+        Vector2 lunarCenter = new Vector2(1303f/1672f,702f/941f);
+        v[0] = center; uv[0] = lunarCenter; c[0] = lunar ? Color.white : Ink(79,157,185,alpha[0]);
+        for (int j = 0; j < rings.Length; j++)
+        for (int i = 0; i < slices; i++)
         {
-            float side = (j + seed) % 2 == 0 ? -1 : 1;
-            float t = .42f + .12f * j;
-            Vector2 a = Vector2.Lerp(foot, tip, t) + Vector2.left * bend * .22f;
-            Vector2 end = a + new Vector2(side * height * (.23f + .045f * Mathf.Sin(seed + j)), height * (.23f + .04f * j));
-            Limb(ink, a, a + new Vector2(side * height * .18f, .08f * height), end, width * (.25f - .025f * j), bark, light, edge, outline);
-            if (j < 2 && outline)
-                Limb(ink, Vector2.Lerp(a, end, .64f), end + new Vector2(-side * .18f, -.1f), end + new Vector2(side * .48f, .12f), width * .08f, bark, light, edge, true);
+            float a = i * (2*Mathf.PI/slices); Vector2 d = new Vector2(Mathf.Cos(a),Mathf.Sin(a));
+            int k=1+j*slices+i, next=1+j*slices+(i+1)%slices;
+            v[k] = center+d*rings[j]; uv[k] = lunarCenter + Vector2.Scale(texel,d) * (rings[j]/.916f*34);
+            c[k] = lunar ? new Color(1,1,1,alpha[j]) : Ink(79,157,185,alpha[j]);
+            if(j==0) tri.AddRange(new[]{0,k,next});
+            else tri.AddRange(new[]{k-slices,k,next,k-slices,next,next-slices});
         }
-        if (outline)
+        Surface(name,sky,lunar?moonPaint:paper,lunar?-96:-97,v,uv,c,tri.ToArray());
+    }
+
+    enum GroundPart { Cliff, Bank, Trail }
+
+    void Ribbon(GroundPart part)
+    {
+        bool cliff = part == GroundPart.Cliff;
+        bool bank = part == GroundPart.Bank;
+        float x = cliff ? -25.5f : bank ? -22.8f : -16.2f;
+        float[] widths = cliff ? new[] { 32f, 32f, 38f, 29f, 35f } : new[] { 22.7f, 26.4f, 24.6f, 29.8f, 23.3f };
+        int section = 0;
+        while (x < World.MaxX + 33)
         {
-            for (int j = 0; j < 4; j++)
+            float width = widths[section % widths.Length];
+            int steps = Mathf.CeilToInt(width / .48f);
+            var vertices = new Vector3[(steps + 1) * 2];
+            var uv = new Vector2[vertices.Length];
+            var colors = new Color[vertices.Length];
+            var triangles = new int[steps * 6];
+            bool forward = cliff ? section % 2 == 1 : section % 2 == 0;
+            for (int j = 0; j <= steps; j++)
             {
-                float t = .13f + .16f * j;
-                float xx = x + bend * t * t - bend * (1 - t) * t + width * .2f;
-                float yy = y + height * t;
-                ink.Stroke(Color.Lerp(edge, bark, .4f), .023f, new Vector2(xx + .07f, yy), new Vector2(xx, yy + .23f), new Vector2(xx + .025f, yy + .45f));
+                float t = j / (float)steps;
+                float px = x + t * width;
+                float soil = World.Height(px);
+                float top = cliff ? 5.52f + .64f * Mathf.Sin(px * .103f) :
+                    bank ? .74f + .17f * Mathf.Sin(px * .38f) : -.12f + .095f * Mathf.Sin(px * .46f);
+                float bottom = cliff ? -3.3f : bank ? -3.15f : -6.35f;
+                int k = j * 2;
+                float u = forward ? t : 1 - t;
+                vertices[k] = new Vector3(px, soil + bottom);
+                vertices[k + 1] = new Vector3(px, soil + top);
+                uv[k] = new Vector2(u, bank ? .52f : 0);
+                uv[k + 1] = new Vector2(u, 1);
+                colors[k] = colors[k + 1] = cliff ? Ink(176,201,217) : bank ? Ink(133,157,151) : Ink(225,234,239);
+                if (j < steps) Quad(triangles, j * 6, k, k + 2, k + 3, k + 1);
             }
-        }
-        if (seed % 7 == 0) return;
-        for (int j = 0; j < 5; j++)
-        {
-            float ox = (j - 2) * height * .145f;
-            float oy = height * (1 - .10f * Mathf.Abs(j - 2)) + .13f * Mathf.Sin(seed + j * 2.4f);
-            Leaves(ink, x + bend + ox, y + oy, height * (.19f + .015f * Mathf.Sin(seed * 2 + j)), height * .145f, seed + j * 3,
-                Color.Lerp(foliage, bark, j % 2 == 0 ? .035f : 0), light, edge, outline);
+            var mesh = Surface(part.ToString(), cliff ? forest : near, cliff ? stone : path, cliff ? -84 : bank ? -68 : -63,
+                vertices, uv, colors, triangles);
+            if (part == GroundPart.Trail)
+            {
+                var tufts = new GameObject("Grass at the root line");
+                tufts.transform.SetParent(near, false);
+                tufts.AddComponent<MeshFilter>().sharedMesh = mesh;
+                var renderer = tufts.AddComponent<MeshRenderer>();
+                renderer.sharedMaterial = grass;
+                renderer.sortingLayerName = "Background";
+                renderer.sortingOrder = -48;
+            }
+            x += width;
+            section++;
         }
     }
 
-    void Ruin(Ink ink, float x, float y, float scale)
+    static void Quad(int[] indices, int start, int a, int b, int c, int d)
     {
-        Color stone = C("303b50"), edge = C("101420"), face = C("74858e");
-        for (int i = 0; i < 2; i++)
-        {
-            float xx = x + (i == 0 ? -1 : 1) * scale;
-            ink.Poly(edge, new Vector2(xx - .38f * scale, y), new Vector2(xx - .32f * scale, y + 2.7f * scale), new Vector2(xx + .30f * scale, y + 2.8f * scale), new Vector2(xx + .4f * scale, y));
-            ink.Poly(stone, new Vector2(xx - .25f * scale, y), new Vector2(xx - .23f * scale, y + 2.65f * scale), new Vector2(xx + .24f * scale, y + 2.7f * scale), new Vector2(xx + .27f * scale, y));
-            ink.Stroke(face, .05f * scale, new Vector2(xx - .19f * scale, y + .1f), new Vector2(xx - .19f * scale, y + 2.6f * scale));
-            for (int j = 1; j < 6; j++) ink.Stroke(edge, .035f * scale, new Vector2(xx - .25f * scale, y + j * .43f * scale), new Vector2(xx + .25f * scale, y + j * .43f * scale));
-        }
-        var arc = new Vector2[13];
-        for (int i = 0; i < arc.Length; i++) { float a = i * Mathf.PI / 12; arc[i] = new Vector2(x + Mathf.Cos(a) * scale, y + (2.65f + Mathf.Sin(a) * 1.05f) * scale); }
-        ink.Stroke(edge, .48f * scale, arc); ink.Stroke(stone, .34f * scale, arc);
-        ink.Stroke(C("315943"), .07f, new Vector2(x - scale, y + 2.8f * scale), new Vector2(x - 1.13f * scale, y + 1.6f * scale), new Vector2(x - .9f * scale, y + .4f * scale));
+        indices[start] = a; indices[start + 1] = b; indices[start + 2] = c;
+        indices[start + 3] = a; indices[start + 4] = c; indices[start + 5] = d;
     }
 
-    void Draw()
+    void Tree(int kind, float x, float y, float height, bool turn = false, bool withBough = false)
     {
-        material = new Material(Shader.Find("Sprites/Default"));
-        var sky = new Ink();
-        sky.Band(C("130c2d"), x => 20, x => -15); sky.Gradient(C("130c2d"), C("493070"), 5, -3);
-        sky.Oval(C("655087"), 10, 3.2f, .85f, .85f, 40); sky.Oval(C("e9e5bd"), 10, 3.2f, .60f, .60f, 40); sky.Oval(C("26183e"), 10.24f, 3.39f, .56f, .56f, 40);
-        var stars = new System.Random(322);
-        for (int i = 0; i < 160; i++)
+        var sprite = trees[kind];
+        Rect rect = sprite.rect;
+        float width = height * rect.width / rect.height;
+        float baseY = y - .71f;
+        const int columns = 18;
+        float[] levels = { 0, .10f, .28f, .55f, 1 };
+        var vertices = new Vector3[(columns + 1) * levels.Length];
+        var colors = new Color[vertices.Length];
+        var uv = new Vector2[vertices.Length];
+        var triangles = new int[columns * (levels.Length - 1) * 6];
+        for (int row = 0; row < levels.Length; row++)
+        for (int column = 0; column <= columns; column++)
         {
-            float x = -30 + (float)stars.NextDouble() * 205;
-            float y = 1.2f + (float)stars.NextDouble() * 5;
-            float radius = i % 11 == 0 ? .022f : .009f;
-            sky.Oval(i % 11 == 0 ? C("e6dbf1") : C("807699"), x, y, radius, radius, 6);
+            float u = column / (float)columns;
+            float v = levels[row];
+            float px = x + (u - .5f) * width;
+            float rooted = 1 - Mathf.SmoothStep(0, 1, v / .34f);
+            float ground = Mathf.Lerp(World.Height(x), World.Height(px), rooted);
+            int k = row * (columns + 1) + column;
+            vertices[k] = new Vector3(px, ground + baseY + v * height);
+            uv[k] = new Vector2((rect.x + (turn ? 1 - u : u) * rect.width) / sprite.texture.width,
+                (rect.y + v * rect.height) / sprite.texture.height);
+            colors[k] = Color.Lerp(Ink(181,194,188), Color.white, Mathf.SmoothStep(0,1,v / .20f));
+            if (row + 1 < levels.Length && column < columns)
+                Quad(triangles, (row * columns + column) * 6, k, k + 1, k + columns + 2, k + columns + 1);
         }
-        Finish("Violet dusk", sky, -100, .90f);
-        var far = new Ink();
-        far.Band(C("27294b"), x => .5f + Mathf.Sin(x * .12f) * .9f + Mathf.Sin(x * .31f) * .25f, x => -10);
-        for (int i = 0; i < 65; i++)
+        Surface(sprite.name, near, treePaint, -52, vertices, uv, colors, triangles);
+        if (!withBough) return;
+        float offset = turn ? .87f : -.87f;
+        var twig = Place("Oak bough", details[0], near, x + offset, baseY + height * .48f, height * .17f, -53,
+            new Color(.64f,.74f,.70f), turn);
+        sprigs.Add(new MovingSprig { root = twig.transform, angle = turn ? 12 : -9, speed = .63f, phase = x, amplitude = .37f });
+    }
+
+    void Fern(float x,float y,float height,bool flank=false,bool flip=false)
+    {
+        var sr=Place("Bracken",details[1],flank?front:near,x,y,height,flank?4:-42,
+            flank?new Color(.34f,.46f,.49f):new Color(.58f,.71f,.70f),flip,flank?"Foreground":"Background");
+        sprigs.Add(new MovingSprig { root=sr.transform, angle=flip?-5:3,speed=.73f,phase=x*.37f,amplitude=.56f });
+    }
+
+    void Lantern(float x,float y,float size)
+    {
+        var post=Place("Wayside lantern", details[2],near,x,y,size,-40,Color.white);
+        var anchor=new GameObject("Candle wick").transform; anchor.SetParent(post.transform,false);
+        anchor.localPosition=new Vector2(.96f,3.095f);
+        var flame=Surface("Living flame",anchor,paper,-39,new Vector3[14],null,
+            new[]{Ink(248,144,42),Ink(248,144,42),Ink(255,175,54),Ink(255,175,54),Ink(255,175,54),Ink(248,144,42),Ink(248,144,42),
+            Ink(255,224,144),Ink(255,224,144),Ink(255,240,173),Ink(255,240,173),Ink(255,240,173),Ink(255,224,144),Ink(255,224,144)},
+            new[]{0,1,2,0,2,3,0,3,4,0,4,5,0,5,6,7,8,9,7,9,10,7,10,11,7,11,12,7,12,13});
+        flame.MarkDynamic(); flame.bounds=new Bounds(new Vector3(0,.14f,0),new Vector3(.55f,.7f,.02f));
+        lamps.Add(new Lamp{wick=anchor,flame=flame,phase=x*.53f});
+    }
+
+    void Mist(float x,float y,float width,float height,float tilt)
+    {
+        var root=Plane("Mist caught behind the trees",.09f,false,x*.36f+1);
+        const int steps=20; var v=new Vector3[(steps+1)*3]; var colors=new Color[v.Length]; var tri=new int[steps*12];
+        for(int i=0;i<=steps;i++)
         {
-            float x = -30 + i * 2.85f, h = 2.1f + Mathf.Sin(i * 2.7f) * .9f;
-            Tree(far, x, -.7f, h, .22f, i, C("17253b"), C("30445b"), C("16263a"), false);
+            float t=i/(float)steps, px=x+(t-.5f)*width, weight=Mathf.Sin(t*Mathf.PI);
+            float mid=World.Height(px)+y+tilt*t+.09f*Mathf.Sin(t*7);
+            int k=i*3; v[k]=new Vector2(px,mid-height*weight); v[k+1]=new Vector2(px,mid); v[k+2]=new Vector2(px,mid+height*weight*.72f);
+            colors[k]=colors[k+2]=Ink(105,155,164,0); colors[k+1]=Ink(105,155,164,.049f*weight);
+            if(i==steps) continue;
+            int q=i*12; for(int j=0;j<2;j++){int n=k+j;tri[q++]=n;tri[q++]=n+3;tri[q++]=n+4;tri[q++]=n;tri[q++]=n+4;tri[q++]=n+1;}
         }
-        Finish("Distant sleeping woods", far, -90, .52f);
-        var castle = new Ink();
-        float summit = 1.15f;
-        castle.Poly(C("292b49"), new Vector2(33, -8), new Vector2(38, -.8f), new Vector2(42, .1f), new Vector2(44.6f, summit), new Vector2(47.4f, summit + .08f), new Vector2(49, .2f), new Vector2(52, -.6f), new Vector2(57, -8));
-        castle.Poly(C("343950"), new Vector2(38, -.8f), new Vector2(42, .1f), new Vector2(44.6f, summit), new Vector2(45.5f, summit), new Vector2(43.5f, -.3f), new Vector2(42.8f, -1.5f), new Vector2(39, -3));
-        castle.Poly(C("20243c"), new Vector2(45.4f, summit), new Vector2(47.4f, summit + .08f), new Vector2(49, .2f), new Vector2(52, -.6f), new Vector2(48, -3), new Vector2(46.1f, -.3f));
-        castle.Poly(C("24283e"), new Vector2(44.6f, summit), new Vector2(44.6f, summit + .56f), new Vector2(47.5f, summit + .56f), new Vector2(47.5f, summit));
-        for (int i = 0; i < 5; i++)
+        Surface("Low mist",root,paper,-71,v,null,colors,tri);
+    }
+
+    void Fireflies(float x,float y,int count)
+    {
+        for(int i=0;i<count;i++)
         {
-            float x = 44.65f + i * .55f, h = .65f + (i == 2 ? .70f : (i % 2) * .25f);
-            castle.Poly(C("24283e"), new Vector2(x, summit), new Vector2(x, summit + h), new Vector2(x + .36f, summit + h), new Vector2(x + .36f, summit));
-            castle.Poly(C("171c32"), new Vector2(x - .08f, summit + h), new Vector2(x + .15f, summit + h + .35f), new Vector2(x + .44f, summit + h));
-            castle.Stroke(C("52556a"), .028f, new Vector2(x + .05f, summit + .1f), new Vector2(x + .05f, summit + h - .04f));
-            castle.Stroke(C("98835c"), .028f, new Vector2(x + .18f, summit + h - .28f), new Vector2(x + .18f, summit + h - .15f));
+            float phase=x*.86f+i*2.71f;
+            Vector2 home=World.Project(new Vector2(x+i*.81f,y+.18f*Mathf.Sin(phase)));
+            var sr=Art.New("fx_soft",near,home,-45,"Background",true);
+            sr.transform.localScale=Vector3.one*(.069f+i*.012f);
+            motes.Add(new Mote{sprite=sr,home=home,phase=phase});
         }
-        Finish("Mountain and distant keep", castle, -91, .62f);
-        var middle = new Ink();
-        middle.Band(C("102c2c"), x => -.8f + .5f * Mathf.Sin(x * .18f), x => -12);
-        for (int i = 0; i < 59; i++)
+    }
+
+    void Opening()
+    {
+        Tree(0,-2.3f,-1.52f,9.7f,false,true);
+        Tree(2,8.8f,-1.58f,7.85f);
+        Tree(1,13.1f,-1.34f,9.35f,false,true);
+        Tree(4,25.7f,-1.59f,10.6f);
+        Fern(12.2f,-1.99f,.54f,false,true);
+        Fern(-1.4f,-1.72f,.70f); Fern(8.7f,-5.05f,1.22f,true,true); Fern(24.8f,-1.68f,.69f);
+        Lantern(5.85f,-1.64f,2.24f);
+        Fireflies(11.3f,-.42f,2); Fireflies(22.9f,.03f,1);
+        Mist(3,.18f,10.2f,.49f,.12f); Mist(22,.57f,13,.61f,-.23f);
+    }
+
+    void LateUpdate()
+    {
+        if (CameraRig.I==null) return;
+        var camera=CameraRig.I.transform.position; float time=Time.time;
+        foreach(var p in planes)
         {
-            float x = -27 + i * 3.5f + Mathf.Sin(i * 3.1f) * .85f, y = -1.0f + .3f * Mathf.Sin(x * .18f);
-            Tree(middle, x, y, 4.4f + .9f * Mathf.Sin(i * 1.7f), .45f, i + 91, C("192e32"), C("355052"), C("12342e"), false);
+            float dx=camera.x*p.parallax;
+            float y=p.sky?camera.y:World.Height(camera.x)-World.Height(camera.x-dx);
+            float drift=p.mist==0?0:Mathf.Sin(time*.12f+p.mist)*.34f;
+            p.root.localPosition=new Vector3(dx+drift,y,0);
         }
-        Finish("Mist between the trunks", middle, -82, .20f);
-        var bank = new Ink();
-        bank.Band(C("0b171b"), x => World.Height(x) - .68f, x => -15);
-        bank.Band(C("1d3d29"), x => World.Height(x) - .76f, x => -15);
-        Finish("Continuous moss bank", bank, -70);
-        var woods = new Ink();
-        for (int i = 0; i < 32; i++)
+        float reach=CameraRig.I.HalfW+4;
+        foreach(var s in sprigs)
+            if(Mathf.Abs(s.root.position.x-camera.x)<reach)
+                s.root.localRotation=Quaternion.Euler(0,0,s.angle+s.amplitude*(Mathf.Sin(time*s.speed+s.phase)+.32f*Mathf.Sin(time*1.3f+s.phase)));
+        foreach(var mote in motes)
         {
-            float x = -20 + i * 6.1f + Mathf.Sin(i * 7.3f) * 1.5f;
-            if (Mathf.Abs(x - 55) < 3 || Mathf.Abs(x - 121) < 3) continue;
-            Tree(woods, x, World.Height(x) - .84f, 5.3f + Mathf.Sin(i * 1.8f) * 1.0f, .46f + .12f * Mathf.Sin(i), i + 23, C("292326"), C("605448"), C("0b251d"), true);
+            if(Mathf.Abs(mote.home.x-camera.x)>reach) continue;
+            float t=time*.53f+mote.phase;
+            mote.sprite.transform.localPosition=mote.home+new Vector3(.31f*Mathf.Sin(t)+.12f*Mathf.Sin(t*1.57f),.19f*Mathf.Cos(t*.83f));
+            float pulse=Mathf.Clamp01((Mathf.Sin(t*.83f)+.28f)*1.12f);
+            mote.sprite.color=new Color(.67f,.87f,.64f,pulse*.68f);
         }
-        Ruin(woods, 55, World.Height(55) - .82f, .95f); Ruin(woods, 121, World.Height(121) - .82f, 1.15f);
-        Finish("Rooted oaks and forgotten gates", woods, -65);
-        var floor = new Ink();
-        floor.Band(C("101f18"), x => World.Height(x) - 1.17f, x => -15);
-        floor.Band(C("2d4326"), x => World.Height(x) - 1.23f, x => World.Height(x) - 4.5f);
-        floor.Band(C("465b30"), x => World.Height(x) - 1.4f, x => World.Height(x) - 1.65f + .07f * Mathf.Sin(x));
-        floor.Band(C("3a3028"), x => World.Height(x) - 2.05f + .12f * Mathf.Sin(x * .47f), x => World.Height(x) - 3.28f + .15f * Mathf.Sin(x * .35f));
-        floor.Band(C("665237"), x => World.Height(x) - 2.18f + .1f * Mathf.Sin(x * .47f), x => World.Height(x) - 3.13f + .12f * Mathf.Sin(x * .35f));
-        for (int i = 0; i < 32; i++)
+        Vector4 light=Vector4.zero, pool=Vector4.zero; float nearest=reach+2;
+        foreach(var lamp in lamps)
         {
-            float x = -20 + i * 6.1f + Mathf.Sin(i * 7.3f) * 1.5f;
-            if (Mathf.Abs(x - 55) < 3 || Mathf.Abs(x - 121) < 3) continue;
-            Color shadow = C("08141c"); shadow.a = .42f;
-            floor.Poly(shadow,
-                new Vector2(x - .6f, World.Height(x - .6f) - 1.23f),
-                new Vector2(x + .5f, World.Height(x + .5f) - 1.23f),
-                new Vector2(x + 2.2f, World.Height(x + 2.2f) - 4.5f),
-                new Vector2(x + .4f, World.Height(x + .4f) - 4.5f));
+            var wick=lamp.wick.position; float distance=Mathf.Abs(wick.x-camera.x);
+            if(distance>reach+2) continue;
+            float t=time+lamp.phase;
+            AnimateFlame(lamp.flame,t);
+            if(distance>=nearest) continue;
+            nearest=distance; light=new Vector4(wick.x,wick.y,.87f+.075f*Mathf.Sin(t*6)+.045f*Mathf.Sin(t*11.7f),0);
+            pool=new Vector4(wick.x+.22f,World.Height(wick.x)-2.0f,0,0);
         }
-        var rng = new System.Random(7118);
-        for (int i = 0; i < 650; i++)
+        if (campfire==null && World.shrine!=null) campfire=World.shrine.GetComponent<EndCampfire>();
+        if (campfire!=null && campfire.IsLit && Mathf.Abs(World.CampX-camera.x)<nearest)
         {
-            float x = -25 + (float)rng.NextDouble() * 200, y = -1.5f - (float)rng.NextDouble() * 2.8f;
-            float yy = y + World.Height(x);
-            if (y > -2 || y < -3.3f)
-                floor.Stroke(C("1b3020"), .025f, new Vector2(x - .07f, yy + .06f), new Vector2(x, yy), new Vector2(x + .06f, yy + .10f));
-            else floor.Oval(i % 3 == 0 ? C("9b8356") : C("493c2c"), x, yy, .035f + (float)rng.NextDouble() * .09f, .022f, 7);
+            Vector2 basePos=World.Project(new Vector2(World.CampX,-1.55f));
+            light=new Vector4(basePos.x,basePos.y+.57f,1.35f+.10f*Mathf.Sin(time*6.4f),0);
+            pool=new Vector4(basePos.x,basePos.y-.33f,0,0);
         }
-        Finish("Winding earthen trail", floor, -60);
-        var front = new Ink();
-        front.Band(C("081711"), x => World.Height(x) - 4.48f + .15f * Mathf.Sin(x * .7f), x => -16);
-        for (int i = 0; i < 180; i++)
+        Shader.SetGlobalVector(Wick,light); Shader.SetGlobalVector(Pool,pool);
+    }
+
+    void AnimateFlame(Mesh mesh,float t)
+    {
+        float lean=.037f*Mathf.Sin(t*6.2f)+.023f*Mathf.Sin(t*12.4f+.7f);
+        float h=.31f+.045f*Mathf.Sin(t*8.6f)+.02f*Mathf.Sin(t*14.7f);
+        for(int j=0;j<2;j++)
         {
-            float x = -25 + i * 1.15f, y = World.Height(x) - 4.6f;
-            float h = .2f + .22f * Mathf.Abs(Mathf.Sin(i * 7.7f));
-            front.Poly(C("081711"), new Vector2(x - .16f, y), new Vector2(x - .22f, y + h), new Vector2(x, y + .12f), new Vector2(x + .12f, y + h * .8f), new Vector2(x + .16f, y));
+            int k=j*7; float size=j==0?1:.56f; float shift=j*.012f;
+            flamePoints[k]=new Vector2(shift,.028f);
+            flamePoints[k+1]=new Vector2(-.072f*size,.078f*size);
+            flamePoints[k+2]=new Vector2(-.052f*size+lean*.2f,h*.64f*size);
+            flamePoints[k+3]=new Vector2((lean+.021f)*size,h*size);
+            flamePoints[k+4]=new Vector2(.035f*size+lean*.43f,h*.53f*size);
+            flamePoints[k+5]=new Vector2(.072f*size,.104f*size);
+            flamePoints[k+6]=new Vector2(.052f*size,.042f*size);
         }
-        Finish("Near bracken", front, 0, 0, "Foreground");
+        mesh.vertices=flamePoints;
     }
 
     void OnDestroy()
     {
-        foreach (var mesh in meshes) if (mesh != null) Destroy(mesh);
-        if (material != null) Destroy(material);
+        Shader.SetGlobalVector(Wick, Vector4.zero);
+        foreach(var asset in owned) if(asset!=null) Destroy(asset);
     }
 }

@@ -160,13 +160,18 @@ public static class GameInput
     public static void ClaimInteract() { interactClaimed = Time.frameCount; }
     static bool InteractIn => MenuSettings.Pressed(12) && Time.frameCount - interactClaimed > 1;
     static bool SwordOut => QuickItems.Selected == 0;
+    static bool PotionOut => QuickItems.Selected == 1;
+    static bool EmberOut => QuickItems.Selected == 2;
     // The selected item decides what the buttons do, wheel open or not. Sword out:
     // light and heavy attacks. Potion out: no attacks at all -- light, heavy or
-    // interact all drink it.
+    // interact all drink it. Embers out: the same buttons cast instead. The Magic
+    // binding (L by default) still casts whatever is equipped, so the wheel is a
+    // second way in, never the only one.
     public static bool Attack => !QuickItems.BlockActions && (current.Contains("attack") || (SwordOut && Primary));
-    public static bool UsePotion => current.Contains("potion") || (!QuickItems.BlockActions && !SwordOut && (Primary || HeavyIn || InteractIn));
+    public static bool UsePotion => current.Contains("potion") || (!QuickItems.BlockActions && PotionOut && (Primary || HeavyIn || InteractIn));
     public static bool Heavy => current.Contains("heavy") || (!QuickItems.BlockActions && SwordOut && HeavyIn);
-    public static bool Magic => current.Contains("magic") || MenuSettings.Pressed(6) || G(g => g.buttonEast.wasPressedThisFrame);
+    public static bool Magic => current.Contains("magic") || MenuSettings.Pressed(6) || G(g => g.buttonEast.wasPressedThisFrame)
+                                || (!QuickItems.BlockActions && EmberOut && (Primary || HeavyIn || InteractIn));
     public static bool Jump => current.Contains("jump") || MenuSettings.Pressed(7) || G(g => g.buttonSouth.wasPressedThisFrame);
     public static bool Dodge => current.Contains("dodge") || MenuSettings.Pressed(8) || G(g => g.rightShoulder.wasPressedThisFrame);
     public static bool Guard => current.Contains("guard") || MenuSettings.Held(13) || G(g => g.leftShoulder.isPressed);

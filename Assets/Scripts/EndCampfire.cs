@@ -5,6 +5,7 @@ public class EndCampfire : MonoBehaviour
 {
     SpriteRenderer glow;
     bool lit;
+    public bool IsLit => lit;
     float clock, nextFlame, nextSpark;
 
     public static EndCampfire Create(Transform parent, Vector2 position)

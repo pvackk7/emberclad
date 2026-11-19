@@ -58,7 +58,11 @@ public class Rig
         r.headSr = r.head.GetComponent<SpriteRenderer>(); r.headNormal = r.headSr.sprite;
         r.headHurt = Art.TryS(redEyes ? "s_head_red_hurt" : "s_head_hurt");
         r.jaw = Part(r.head, "s_jaw", new Vector2(-0.03f, 0.03f), 5);
-        if (helm) Part(r.head, "s_helm", new Vector2(0f, 0.46f), 7);
+        // The skull runs -0.073 to 0.447 around the head pivot and the helm's own pivot
+        // sits 13% up its height. 0.46 left it hovering clear of the bone; 0.25 dropped
+        // the brim over the eye sockets and swallowed the face. 0.34 puts the brim about
+        // seven tenths up the skull, which is where a helmet actually sits.
+        if (helm) Part(r.head, "s_helm", new Vector2(0f, 0.34f), 7);
         if (boss) Part(r.head, "s_antlers", new Vector2(-0.01f, 0.60f), 7);
         r.armF = Part(r.body, "s_arm", new Vector2(-0.07f, 0.36f), 9);
         r.weapon = Part(r.armF, "s_dagger", new Vector2(0, -0.40f), 8);
@@ -195,13 +199,18 @@ public class Player : Actor
         kb = new Vector2(direction * 3, 0); vel = Vector2.zero;
         Fx.HitSpark(Center, .7f, new Color(.75f, .85f, 1));
     }
-    public int mana = 3; public const int MaxMana = 3;
+    /// An Ember Burst is paid for in blood, not charges: one eighth of the knight's
+    /// maximum, and never the last of it. A full bar is therefore worth exactly
+    /// seven casts, and the eighth is refused rather than fatal.
+    public int EmberCost { get { return Mathf.Max(1, Mathf.CeilToInt(maxHp / 8f)); } }
+    public bool HasEmbers { get { return Game.I != null && Game.I.HasEmbers; } }
+    public bool CanCast { get { return !dead && HasEmbers && hp > EmberCost; } }
     public int comboHits; public float comboHitsT; public int maxCombo; public int kills;
     public bool usedJump, usedDodge, usedAttack, usedHeavy, usedMagic;
     float t; int combo; bool hitDone, air; float comboReset; string buf = ""; float bufT; int airSwings;
-    Vector2 vel, dodgeDir; float dodgeCd, manaRegen; int hitsForMana;
-    Rig rig; SpriteRenderer drinkBottle; float walkPhase, lastStep, spinCur, introT;
-    Vector3 bottleBaseScale; int lastQuickSelected; float swapT = 999f; bool potionOut;
+    Vector2 vel, dodgeDir; float dodgeCd;
+    Rig rig; SpriteRenderer drinkBottle, emberOrb, emberOrbCore; float walkPhase, lastStep, spinCur, introT;
+    Vector3 bottleBaseScale, orbBaseScale; int lastQuickSelected; float swapT = 999f; bool potionOut, emberOut;
     SpriteRenderer swordSprite, shieldSprite; bool grabDone = true;
     /// Fraction of incoming damage the recovered shield soaks.
     public const float ShieldSoak = .25f;
@@ -221,6 +230,10 @@ public class Player : Actor
     const float FlaskTilt = -8f;   // resting lean in degrees. 0 = dead upright.
     const float HoldArm = 18f;     // arm angle while carrying. ~12 is the idle sword arm, so this is "at his side".
     const int FlaskOrder = 6;      // same layer as the sword: behind the arm, so the gauntlet closes over it.
+    const float OrbY = -.60f;      // the ember rides a touch lower than the flask, out past the knuckles.
+    // In front of everything, the raised shield (9) included: a light source held in
+    // the fist has nothing in the rig that should occlude it.
+    const int OrbOrder = 10;
 
     static readonly float[] Dur = { 0.26f, 0.26f, 0.30f, 0.46f }, HitT = { 0.07f, 0.07f, 0.09f, 0.15f }, Range = { 1.35f, 1.35f, 1.55f, 1.75f }, Knock = { 3f, 3f, 4.5f, 10f }, Stop = { 0.045f, 0.045f, 0.055f, 0.11f };
     static readonly int[] Dmg = { 7, 7, 9, 15 };
@@ -238,6 +251,17 @@ public class Player : Actor
         p.drinkBottle.transform.localScale = Vector3.one * (.35f / p.drinkBottle.sprite.bounds.size.y);
         p.bottleBaseScale = p.drinkBottle.transform.localScale;
         p.drinkBottle.enabled = false;
+        // Embers show as a live coal held in the same fist: an additive glow with a
+        // hotter core inside it, both counter-rotated so they stay put as the arm swings.
+        p.emberOrb = Art.New("fx_glow", p.rig.armF, new Vector3(0, OrbY, 0), OrbOrder, "Default", true);
+        p.emberOrb.transform.localScale = Vector3.one * (.46f / p.emberOrb.sprite.bounds.size.y);
+        p.orbBaseScale = p.emberOrb.transform.localScale;
+        p.emberOrb.color = new Color(1f, .44f, .10f, .70f);
+        p.emberOrb.enabled = false;
+        p.emberOrbCore = Art.New("fx_glow", p.emberOrb.transform, Vector3.zero, OrbOrder + 1, "Default", true);
+        p.emberOrbCore.transform.localScale = Vector3.one * .40f;
+        p.emberOrbCore.color = new Color(1f, .93f, .64f, .92f);
+        p.emberOrbCore.enabled = false;
         p.swordSprite = p.rig.weapon.GetComponent<SpriteRenderer>();
         p.lastQuickSelected = QuickItems.Selected;
         if (Game.I != null && Game.I.HasShield) p.EquipShield();
@@ -284,9 +308,13 @@ public class Player : Actor
         // flask waits until he is back on his feet. Attacking with the potion
         // equipped therefore draws the blade instead of swinging thin air.
         potionOut = QuickItems.Selected == 1 && (st == St.Normal || st == St.Hurt);
+        emberOut = QuickItems.Selected == 2 && (st == St.Normal || st == St.Hurt);
         bool flask = (st == St.Drink && t < .65f) || (potionOut && !reaching);
+        bool orb = st == St.Cast || (emberOut && !reaching);
         drinkBottle.enabled = flask;
-        if (swordSprite != null) swordSprite.enabled = !flask && !reaching && st != St.Drink;
+        if (emberOrb != null) { emberOrb.enabled = orb; emberOrbCore.enabled = orb; }
+        if (swordSprite != null) swordSprite.enabled = !flask && !orb && !reaching && st != St.Drink;
+        PoseOrb(dt);
         if (shieldSprite != null) shieldSprite.sortingOrder = facing < 0 || st == St.Guard ? ShieldFrontOrder : ShieldBackOrder;
         if (invuln > 0) invuln -= dt;
         if (dodgeCd > 0) dodgeCd -= dt;
@@ -294,7 +322,6 @@ public class Player : Actor
         if (staminaDelay <= 0 && st == St.Normal) stamina = Mathf.Min(MaxStamina, stamina + 25 * dt);
         if (comboReset > 0) { comboReset -= dt; if (comboReset <= 0) combo = 0; }
         if (comboHitsT > 0) { comboHitsT -= dt; if (comboHitsT <= 0) comboHits = 0; }
-        if (mana < MaxMana) { manaRegen += dt; if (manaRegen > 11f) { manaRegen = 0; GainMana(); } }
         bool playing = Game.I.state == Game.State.Playing;
         if (QuickItems.BlockActions) buf = "";
         if (playing && !QuickItems.BlockActions && st != St.Drink && st != St.Dead && st != St.Intro && st != St.Win)
@@ -442,9 +469,14 @@ public class Player : Actor
 
     void StartHeavy(Vector2 move)
     {
+        // Coming down out of a jump is a technique, not a button. Until the forest has
+        // taught it, a heavy in the air is something the knight does not know how to do,
+        // and it costs nothing to try.
+        bool airborne = z > 0.3f;
+        if (airborne && !(Game.I != null && Game.I.HasSlam)) { buf = ""; return; }
         if (!SpendStamina(HeavyCost)) return;
         buf = ""; Face(move); usedHeavy = true; combo = 0; hitDone = false; t = 0;
-        if (z > 0.3f) { st = St.Slam; vz = -22f; Sfx.Play("swing_heavy", 0.6f); return; }
+        if (airborne) { st = St.Slam; vz = -22f; Sfx.Play("swing_heavy", 0.6f); return; }
         st = St.Heavy; kb = new Vector2(facing * 2.5f, 0);
         Sfx.Play("swing_heavy", 0.7f, 0.05f, 0.9f);
     }
@@ -475,8 +507,11 @@ public class Player : Actor
         {
             var e = All[i] as Enemy; if (e == null || e.dead) continue;
             Vector2 d = e.pos - pos; d.y *= 1.8f;
-            if (d.magnitude > radius + e.radius) continue;
-            var h = new Hit { dmg = dmg, knock = 5f, launch = launch, stun = 0.6f, dir = d.x >= 0 ? 1 : -1, heavy = true, from = this };
+            float span = radius + e.radius;
+            if (d.magnitude > span) continue;
+            // Standing on top of the impact hurts a great deal more than catching its edge.
+            float near = Mathf.Lerp(.5f, 1f, 1f - Mathf.Clamp01(d.magnitude / Mathf.Max(span, .01f)));
+            var h = new Hit { dmg = Mathf.Max(1, Mathf.RoundToInt(dmg * near)), knock = 5f, launch = launch, stun = 0.6f, dir = d.x >= 0 ? 1 : -1, heavy = true, from = this };
             if (e.TakeHit(h)) { n++; OnLanded(e); }
         }
         Fx.Ring(pos, radius * 2.2f, new Color(1, 0.8f, 0.5f, 0.9f)); Fx.Ring(pos, radius * 1.4f, new Color(1, 1, 1, 0.7f), 0.22f);
@@ -487,8 +522,16 @@ public class Player : Actor
     void StartCast(Vector2 move)
     {
         buf = ""; Face(move); usedMagic = true;
-        if (mana <= 0) { Sfx.Play("tele", 0.4f, 0, 0.6f); Fx.Emit("fx_puff", Center + new Vector2(facing * 0.5f, 0), new Vector2(0, 1), 0.3f, 0.3f, 0.6f, new Color(0.5f, 0.5f, 0.5f, 0.7f), new Color(0.5f, 0.5f, 0.5f, 0)); Game.I.hud.PulseMana(); return; }
-        st = St.Cast; t = 0; hitDone = false; mana--; manaRegen = 0; combo = 0;
+        // Nothing to spend before the ember is found: stay silent rather than
+        // playing a failure sting for an ability the player has never been given.
+        if (!HasEmbers) return;
+        if (!CanCast) { Sfx.Play("tele", 0.4f, 0, 0.6f); Fx.Emit("fx_puff", Center + new Vector2(facing * 0.5f, 0), new Vector2(0, 1), 0.3f, 0.3f, 0.6f, new Color(0.5f, 0.5f, 0.5f, 0.7f), new Color(0.5f, 0.5f, 0.5f, 0)); Game.I.hud.PulseEmber(); return; }
+        st = St.Cast; t = 0; hitDone = false; combo = 0;
+        // Tell the bar this health is being spent rather than taken, so the strip
+        // ignites and crumbles to ash instead of flinching -- then spend it.
+        Game.I.hud.MarkEmberSpend();
+        hp = Mathf.Max(1, hp - EmberCost);
+        Fx.Flames(Center + new Vector2(facing * 0.4f, 0), 3, 0.5f);
         Sfx.Play("cast", 0.7f);
     }
 
@@ -514,24 +557,32 @@ public class Player : Actor
             var e = All[i] as Enemy; if (e == null || e.dead) continue;
             float dx = (e.pos.x - pos.x) * facing;
             if (dx < -back || dx > range + e.radius) continue;
-            if (Mathf.Abs(e.pos.y - pos.y) > depth + e.radius * 0.5f) continue;
+            float dy = Mathf.Abs(e.pos.y - pos.y);
+            if (dy > depth + e.radius * 0.5f) continue;
             if (e.z < zLo || e.z > zHi) continue;
-            if (e.TakeHit(h)) { n++; OnLanded(e); }
+            // Hit is a struct, so each target gets its own copy and its own number.
+            var hh = h;
+            hh.dmg = Mathf.Max(1, Mathf.RoundToInt(h.dmg * Directness(dx, dy, range, depth, e.radius)));
+            if (e.TakeHit(hh)) { n++; OnLanded(e); }
             if (st == St.Hurt) break;
         }
         return n;
     }
 
+    /// How squarely a blow landed: 1 through the middle of the swing, falling to 0.45 at
+    /// the fringes. Without this a swing into a crowd deals one flat number to everything
+    /// it touches, and position stops mattering the moment there is more than one body.
+    static float Directness(float dx, float dy, float range, float depth, float radius)
+    {
+        float sweet = range * .45f;                                              // where the blade bites
+        float along = Mathf.Clamp01(Mathf.Abs(dx - sweet) / Mathf.Max(range, .01f));
+        float side = Mathf.Clamp01(dy / Mathf.Max(depth + radius * .5f, .01f));
+        return Mathf.Lerp(.45f, 1f, Mathf.Clamp01(1f - along * .8f - side * .6f));
+    }
+
     public void OnLanded(Enemy e)
     {
         comboHits++; comboHitsT = 2.2f; if (comboHits > maxCombo) maxCombo = comboHits;
-        hitsForMana++; if (hitsForMana >= 9) { hitsForMana = 0; GainMana(); }
-    }
-
-    public void GainMana()
-    {
-        if (mana >= MaxMana) return;
-        mana++; Sfx.Play("mana", 0.4f); Game.I.hud.PulseMana();
     }
 
     public void Heal(int amount)
@@ -610,6 +661,22 @@ public class Player : Actor
     /// is cancelled out so it stays upright instead of swinging around like a
     /// decal stuck to the forearm, it squeezes once as the hand closes on it,
     /// and it tips toward the mouth on the way down his throat.
+    /// Keeps the held ember upright as the arm swings, breathes it on two offset
+    /// rates so it never looks like a plain sine, and lets it shed the odd flame.
+    void PoseOrb(float dt)
+    {
+        if (emberOrb == null || !emberOrb.enabled) return;
+        float tt = Time.time;
+        emberOrb.transform.localRotation = Quaternion.Inverse(rig.armF.localRotation);
+        float wob = 1f + Mathf.Sin(tt * 7.3f) * .07f + Mathf.Sin(tt * 11.9f) * .04f;
+        emberOrb.transform.localScale = orbBaseScale * wob * (st == St.Cast ? 1.35f : 1f);
+        emberOrb.color = new Color(1f, .40f + .11f * Mathf.Sin(tt * 9.1f), .09f, .70f);
+        emberOrbCore.transform.localScale = Vector3.one * .40f * (1f + Mathf.Sin(tt * 13.7f) * .10f);
+        // Fx.Flames throws its own wide glow, so keep both the rate and the size low or
+        // the knight ends up standing in a floodlight.
+        if (Random.value < dt * 5.5f) Fx.Flames(World.Unproject(emberOrb.transform.position), 1, .21f);
+    }
+
     void PoseFlask()
     {
         if (drinkBottle == null || !drinkBottle.enabled) return;
@@ -793,6 +860,14 @@ public class EmberWave : MonoBehaviour
 {
     Vector2 pos; int dir; float life, h; SpriteRenderer sr, glow; readonly HashSet<Actor> hit = new HashSet<Actor>();
 
+    // The wave is a line down one lane, and the lane has to mean something. The whole
+    // playfield is only 2.55 units deep (World.MinY..MaxY), so the old 1.0 depth
+    // tolerance reached better than nine tenths of it -- fired from anywhere it swept
+    // every enemy on screen regardless of where they stood. 0.42 plus half a body is
+    // about one body of slack: enough to forgive a near miss, not enough to aim with
+    // your eyes shut. HeightSlack keeps it off anything launched well overhead.
+    const float Reach = 0.8f, LaneDepth = 0.42f, HeightSlack = 1.6f;
+
     public static void Spawn(Vector2 at, int dir, float height)
     {
         var go = new GameObject("EmberWave"); var w = go.AddComponent<EmberWave>();
@@ -815,7 +890,9 @@ public class EmberWave : MonoBehaviour
         for (int i = Actor.All.Count - 1; i >= 0; i--)
         {
             var e = Actor.All[i] as Enemy; if (e == null || e.dead || hit.Contains(e)) continue;
-            if (Mathf.Abs(e.pos.x - pos.x) > 0.8f + e.radius || Mathf.Abs(e.pos.y - pos.y) > 1.0f + e.radius * 0.5f) continue;
+            if (Mathf.Abs(e.pos.x - pos.x) > Reach + e.radius) continue;
+            if (Mathf.Abs(e.pos.y - pos.y) > LaneDepth + e.radius * 0.5f) continue;
+            if (Mathf.Abs(e.z - h) > HeightSlack) continue;
             hit.Add(e);
             var hh = new Hit { dmg = 20, knock = 6f, launch = 5f, stun = 0.7f, dir = dir, heavy = true, from = Game.I.player };
             if (e.TakeHit(hh)) { Game.I.player.OnLanded(e); Fx.Flames(e.Center, 5, 0.9f); Game.I.HitStop(0.03f); }

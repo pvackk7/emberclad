@@ -13,17 +13,18 @@ public partial class Hud : MonoBehaviour
         rewardGainUntil = Time.unscaledTime + 2f;
     }
     Game game; Font font; RectTransform root;
-    RectTransform hpFill, hpTrail, bossFill, bossPanel, goArrow, combo, titlePanel, deathPanel, victoryPanel, helpPanel, bannerRT, fade;
+    EmberHealthBar hpBar;
+    RectTransform bossFill, bossPanel, goArrow, titlePanel, deathPanel, victoryPanel, helpPanel, bannerRT, fade;
     RectTransform staminaFill, xpFill;
     Image staminaImage;
     Text levelText;
     float xpShown = -1, levelPunch; int shownLevel = -1;
     RectTransform promptRT; Text promptLabel; Image promptKey; Text promptKeyText;
     int promptFrame = -9; float promptFade;
-    Image[] embers = new Image[3]; Text comboText, bannerText, fpsText;
+    Text bannerText, fpsText;
     float fpsAccum, fpsWorst; int fpsFrames; bool fpsOn = false; Image fadeImg; CanvasGroup titleCg, bannerCg, deathCg, victoryCg;
-    float hpShown = 1, trail = 1, comboPunch, manaPulse, bannerT, bannerDur, goT; bool goOn, titleOn; int lastCombo; Enemy boss; float bossShown = 1;
-    const float HpW = 302, HpH = 15, BossW = 820;
+    float manaPulse, bannerT, bannerDur, goT; bool goOn, titleOn; Enemy boss; float bossShown = 1;
+    const float HpW = 302, BossW = 820;   // HpH moved to EmberHealthBar.ChH with the rest of the channel
 
     static readonly Color Dark = new Color(0.045f, 0.035f, 0.055f, 0.86f), Cream = new Color(0.89f, 0.83f, 0.75f, 1), Gold = new Color(0.94f, 0.76f, 0.53f, 1);
     static readonly Color Stamina = new Color(.36f, .62f, .95f), StaminaLow = new Color(.24f, .36f, .62f);
@@ -87,29 +88,33 @@ public partial class Hud : MonoBehaviour
         Vector2 TL = new Vector2(0, 1), TR = new Vector2(1, 1), TC = new Vector2(0.5f, 1), C = new Vector2(0.5f, 0.5f), RC = new Vector2(1, 0.5f);
 
         // --- player panel ---
-        var pp = FramedPanel("Knight panel", root, TL, new Vector2(28, -28), new Vector2(515, 184));
-        Img("ui_round", pp, TL, new Vector2(14, -14), new Vector2(108, 104), new Color(0.2f, 0.13f, 0.14f, 1), null, true);
-        Img("k_head", pp, TL, new Vector2(20, -19), new Vector2(98, 92), Color.white);
+        // Embers moved to the hotbar, so the panel loses that row. The portrait sets
+        // the floor of the left column, so it shrinks too or the labels have nowhere
+        // to move up into.
+        var pp = FramedPanel("Knight panel", root, TL, new Vector2(28, -28), new Vector2(515, 146));
+        Img("ui_round", pp, TL, new Vector2(14, -14), new Vector2(80, 76), new Color(0.2f, 0.13f, 0.14f, 1), null, true);
+        Img("k_head", pp, TL, new Vector2(20, -18), new Vector2(68, 66), Color.white);
         Txt("KNIGHT", pp, TL, new Vector2(132, -13), new Vector2(200, 34), 24, Gold, TextAnchor.MiddleLeft);
-        Img("ui_round", pp, TL, new Vector2(132, -52), new Vector2(HpW + 12, HpH + 12), new Color(0.05f, 0.04f, 0.05f, 1), null, true);
-        hpTrail = Img("ui_white", pp, TL, new Vector2(138, -58), new Vector2(HpW, HpH), new Color(0.85f, 0.69f, 0.44f, 1)).rectTransform;
-        hpFill = Img("ui_white", pp, TL, new Vector2(138, -58), new Vector2(HpW, HpH), new Color(0.68f, 0.25f, 0.23f, 1)).rectTransform;
-        Img("ui_white", pp, TL, new Vector2(138, -58), new Vector2(HpW, 3), new Color(1, 1, 1, 0.16f));
-        for (int i = 0; i < 3; i++) embers[i] = Img("ui_ember", pp, TL, new Vector2(151 + i * 44, -84), new Vector2(38, 38), Color.white);
-        Txt("EMBERS", pp, TL, new Vector2(291, -88), new Vector2(155, 34), 19, Gold, TextAnchor.MiddleLeft);
-        Img("ui_round", pp, TL, new Vector2(132, -125), new Vector2(HpW + 12, 20), Dark, null, true);
-        staminaImage = Img("ui_white", pp, TL, new Vector2(138, -129), new Vector2(HpW, 12), Stamina);
+        // Health is a strip of coals with a flame at the leading edge. EmberHealthBar draws
+        // its own iron frame, so the plate and the two flat fill rects that used to live
+        // here are gone; its channel constants put the bar exactly where they sat, and the
+        // taller rect is only headroom for the flame and sparks.
+        hpBar = Rect("Health", pp, TL, new Vector2(126, -34), new Vector2(320, 52)).gameObject.AddComponent<EmberHealthBar>();
+        Img("ui_round", pp, TL, new Vector2(132, -94), new Vector2(HpW + 12, 20), Dark, null, true);
+        staminaImage = Img("ui_white", pp, TL, new Vector2(138, -98), new Vector2(HpW, 12), Stamina);
         staminaFill = staminaImage.rectTransform;
-        Txt("STAMINA", pp, TL, new Vector2(20, -123), new Vector2(108, 26), 16, Cream, TextAnchor.MiddleLeft);
-        levelText = Txt("LV 1", pp, TL, new Vector2(20, -151), new Vector2(108, 26), 18, Gold, TextAnchor.MiddleLeft);
-        Img("ui_round", pp, TL, new Vector2(132, -151), new Vector2(HpW + 12, 14), Dark, null, true);
-        xpFill = Img("ui_white", pp, TL, new Vector2(138, -154), new Vector2(0, 8), new Color(0.88f, 0.81f, 0.69f, 1)).rectTransform;
-        var kp = FramedPanel("Khalid panel", root, TL, new Vector2(28, -226), new Vector2(212, 59));
+        Txt("STAMINA", pp, TL, new Vector2(20, -92), new Vector2(108, 26), 16, Cream, TextAnchor.MiddleLeft);
+        levelText = Txt("LV 1", pp, TL, new Vector2(20, -120), new Vector2(108, 26), 18, Gold, TextAnchor.MiddleLeft);
+        Img("ui_round", pp, TL, new Vector2(132, -122), new Vector2(HpW + 12, 14), Dark, null, true);
+        xpFill = Img("ui_white", pp, TL, new Vector2(138, -125), new Vector2(0, 8), new Color(0.88f, 0.81f, 0.69f, 1)).rectTransform;
+        var kp = FramedPanel("Jaren panel", root, TL, new Vector2(28, -188), new Vector2(212, 59));
         Img("p_head", kp, TL, new Vector2(9, -4), new Vector2(57, 53), Color.white);
-        Txt("Khalid", kp, TL, new Vector2(71, -12), new Vector2(128, 36), 25, Cream, TextAnchor.MiddleLeft);
+        Txt("Jaren", kp, TL, new Vector2(71, -12), new Vector2(128, 36), 25, Cream, TextAnchor.MiddleLeft);
 
         rewardGainText = Txt("", root, TR, new Vector2(-32, -60), new Vector2(360, 40), 25, Cream, TextAnchor.UpperRight);
         BuildCinders();
+        BuildSiphon();
+        BuildDamage();
         BuildPrompt();
 
         // --- boss bar ---
@@ -119,12 +124,7 @@ public partial class Hud : MonoBehaviour
         bossFill = Img("ui_white", bossPanel, TC, new Vector2(-BossW / 2, -50), new Vector2(BossW, 24), new Color(0.68f, 0.28f, 0.26f, 1), new Vector2(0, 1)).rectTransform;
         bossPanel.gameObject.SetActive(false);
 
-        // --- combo counter ---
-        combo = Rect("Combo", root, TR, new Vector2(-60, -220), new Vector2(400, 120));
         fpsText = Txt("", root, TR, new Vector2(-14, -10), new Vector2(260, 30), 22, new Color(0.65f, 1f, 0.72f, 0.95f), TextAnchor.UpperRight, new Vector2(1, 1));
-        comboText = Txt("", combo, C, Vector2.zero, new Vector2(400, 120), 64, Gold, TextAnchor.MiddleRight);
-        Txt("HITS", combo, C, new Vector2(0, -56), new Vector2(400, 40), 26, Cream, TextAnchor.MiddleRight);
-        combo.gameObject.SetActive(false);
         fpsText.enabled = fpsOn;
 
         // --- go arrow ---
@@ -150,7 +150,7 @@ public partial class Hud : MonoBehaviour
         deathPanel = Full("Death", root); deathCg = Group(deathPanel, 0);
         var d = deathPanel.gameObject.AddComponent<Image>(); d.color = new Color(0.12f, 0.02f, 0.03f, 0.6f); d.raycastTarget = false;
         Txt("YOU FELL", deathPanel, C, new Vector2(0, 90), new Vector2(1400, 160), 130, new Color(1, 0.45f, 0.4f));
-        Txt("Khalid nudges you awake...", deathPanel, C, new Vector2(0, -30), new Vector2(1400, 60), 38, Cream);
+        Txt("Jaren nudges you awake...", deathPanel, C, new Vector2(0, -30), new Vector2(1400, 60), 38, Cream);
         Txt("Press  R  to rise again at the last checkpoint", deathPanel, C, new Vector2(0, -120), new Vector2(1400, 60), 42, Gold);
         victoryPanel = Full("Victory", root); victoryCg = Group(victoryPanel, 0);
         var v = victoryPanel.gameObject.AddComponent<Image>(); v.color = new Color(0.04f, 0.08f, 0.06f, 0.55f); v.raycastTarget = false;
@@ -167,7 +167,7 @@ public partial class Hud : MonoBehaviour
         KeyRow(box, L, new Vector2(50, -226), new[] { "F" }, "Roll: dodge attacks, 28 stamina", 0.85f, 32);
         KeyRow(box, L, new Vector2(640, -66), new[] { "J" }, "Use equipped item", 0.85f, 32);
         KeyRow(box, L, new Vector2(640, -146), new[] { "K" }, "Heavy / guard break (34 stamina)", 0.85f, 32);
-        KeyRow(box, L, new Vector2(640, -226), new[] { "L" }, "Ember Burst", 0.85f, 32);
+        KeyRow(box, L, new Vector2(640, -226), new[] { "L" }, "Ember Burst: costs an eighth of your health", 0.85f, 32);
         Txt("Hold G + move mouse: up = sword, right = potion. Release to equip.\nClick / J uses the equipped item. Hold SHIFT to raise the shield once you have one.", box, L, new Vector2(50, -300), new Vector2(1080, 110), 28, Cream, TextAnchor.UpperLeft);
         Txt("Press  TAB  to resume", helpPanel, C, new Vector2(0, -310), new Vector2(1000, 60), 40, Gold);
         helpPanel.gameObject.SetActive(false);
@@ -178,7 +178,13 @@ public partial class Hud : MonoBehaviour
     public void ShowHelp(bool on) { helpPanel.gameObject.SetActive(on); }
     public void ShowGo() { goOn = true; goT = 0; goArrow.gameObject.SetActive(true); }
     public void HideGo() { goOn = false; goArrow.gameObject.SetActive(false); }
-    public void PulseMana() { manaPulse = 1; }
+    /// Flash the ember slot: the cast was refused for want of health.
+    public void PulseEmber() { manaPulse = 1; }
+    /// Levelling restocked the knight: relight the whole strip of coals.
+    public void LevelRestore() { if (hpBar != null) hpBar.Restore(); }
+    /// Health leaving for an Ember ability burns to ash instead of flinching like a wound.
+    /// Announced rather than inferred, because the bar cannot tell the two apart by value.
+    public void MarkEmberSpend() { if (hpBar != null) hpBar.NoteEmberSpend(); }
     public void Banner(string s, float dur) { bannerText.text = s; bannerT = dur; bannerDur = dur; }
     public void ShowBoss(Enemy b) { boss = b; bossShown = 1; bossPanel.gameObject.SetActive(true); }
     public void HideBoss() { boss = null; bossPanel.gameObject.SetActive(false); }
@@ -189,7 +195,7 @@ public partial class Hud : MonoBehaviour
     {
         victoryOn = true; Vector2 C = new Vector2(0.5f, 0.5f);
         Txt("FOREST CLEARED", victoryPanel, C, new Vector2(0, 300), new Vector2(1600, 160), 120, Gold);
-        Txt("The campfire burns again. Khalid approves.", victoryPanel, C, new Vector2(0, 190), new Vector2(1400, 60), 36, Cream);
+        Txt("The campfire burns again. Jaren approves.", victoryPanel, C, new Vector2(0, 190), new Vector2(1400, 60), 36, Cream);
         var box = Img("ui_round", victoryPanel, C, new Vector2(0, -20), new Vector2(820, 300), Dark, null, true).rectTransform;
         int m = (int)(time / 60), s = (int)(time % 60);
         string[] labels = { "Time", "Skeletons shattered", "Best combo", "Falls" };
@@ -228,32 +234,21 @@ public partial class Hud : MonoBehaviour
                 }
             }
         }
-        // health
-        float hp = Mathf.Clamp01((float)p.hp / p.maxHp);
-        hpShown = Mathf.Lerp(hpShown, hp, 1 - Mathf.Exp(-18 * dt)); trail = hp > trail ? hp : Mathf.MoveTowards(trail, hp, dt * 0.35f);
+        // health -- p.hp stays the single source of truth; the bar only animates toward it
+        hpBar.SetHealth(Mathf.Clamp01((float)p.hp / p.maxHp));
+        // Behind the opaque title menu the bar keeps its state but stops rebuilding its
+        // mesh. The pause menu is only a shade, so the flame has to keep burning there.
+        hpBar.hidden = titleOn && !pauseMenu && titleCg.alpha > 0.99f;
         staminaFill.sizeDelta = new Vector2(HpW * Mathf.Clamp01(game.player.stamina / Player.MaxStamina), 12);
         staminaImage.color = game.player.stamina < Player.RollCost ? StaminaLow : Stamina;
         TickLevel(dt);
         TickCinders(dt);
+        TickSiphon(dt);
+        TickTeach(dt);
+        TickDamage(dt);
         TickPrompt(dt);
-        hpFill.sizeDelta = new Vector2(HpW * hpShown, HpH); hpTrail.sizeDelta = new Vector2(HpW * trail, HpH);
-        // embers
+        // embers -- drawn by the hotbar now; this only decays the kick PulseEmber gives it
         manaPulse = Mathf.MoveTowards(manaPulse, 0, dt * 3);
-        for (int i = 0; i < 3; i++)
-        {
-            bool on = i < p.mana; embers[i].sprite = Art.S(on ? "ui_ember" : "ui_ember_off");
-            float s = 1 + (on ? Mathf.Sin(Time.unscaledTime * 5 + i) * 0.05f : 0) + manaPulse * 0.35f; embers[i].rectTransform.localScale = new Vector3(s, s, 1);
-        }
-        // combo
-        if (p.comboHits >= 3)
-        {
-            if (!combo.gameObject.activeSelf) combo.gameObject.SetActive(true);
-            if (p.comboHits != lastCombo) { comboPunch = 1; comboText.text = p.comboHits.ToString(); }
-            comboPunch = Mathf.MoveTowards(comboPunch, 0, dt * 6); float s = 1 + comboPunch * 0.45f; combo.localScale = new Vector3(s, s, 1);
-            comboText.color = Color.Lerp(Gold, new Color(1, 0.45f, 0.25f), Mathf.Clamp01(p.comboHits / 30f));
-        }
-        else if (combo.gameObject.activeSelf) combo.gameObject.SetActive(false);
-        lastCombo = p.comboHits;
         // boss
         if (boss != null) { bossShown = Mathf.Lerp(bossShown, Mathf.Clamp01((float)boss.hp / boss.maxHp), 1 - Mathf.Exp(-12 * dt)); bossFill.sizeDelta = new Vector2(BossW * bossShown, 24); }
         // go arrow

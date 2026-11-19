@@ -209,7 +209,7 @@ public class Enemy : Actor
         }
     }
 
-    /// Khalid's pounce: a brief stun without real damage.
+    /// Jaren's pounce: a brief stun without real damage.
     public void Distract(float dur)
     {
         if (dead || IsBoss || st == St.Spawn || st == St.Air || st == St.Down) return;
@@ -238,6 +238,7 @@ public class Enemy : Actor
             return false;
         }
         hp -= h.dmg; lastDir = h.dir; faceT = h.heavy ? .45f : .32f;
+        if (h.from is Player && Game.I != null && Game.I.hud != null) Game.I.hud.ShowDamage(this, h.dmg);
         Flash(Color.white, 0.14f);
         Vector2 sp = Center + new Vector2(-h.dir * radius * 0.6f, Random.Range(-0.2f, 0.3f) * scale);
         Fx.HitSpark(sp, h.heavy ? 1.05f : 0.8f, new Color(1, 0.9f, 0.6f), h.dir);

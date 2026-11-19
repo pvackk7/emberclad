@@ -15,7 +15,9 @@ public static class CharacterArt
             Add(sprites, knight, "k_cape", 4, .95f, new Vector2(.86f, .94f));
             Add(sprites, knight, "k_sword", 5, 1.18f, new Vector2(.5f, .20f));
         }
-        var potion = Single("Art/Characters/HealthPotion");
+        // Same bottle, liquid pushed from crimson to ember orange-red. The original
+        // crimson art is untouched on disk and is still the fallback.
+        var potion = Single("Art/Characters/EmberPotion") ?? Single("Art/Characters/HealthPotion");
         if (potion != null) sprites["ui_potion"] = potion;
         var shield = Resources.Load<Texture2D>("Art/Characters/SkeletonShield");
         if (shield != null)

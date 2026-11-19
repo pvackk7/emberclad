@@ -10,7 +10,7 @@ using UnityEngine.Rendering;
 /// have to walk around mashing E at scenery to find out what is interactive.
 public class Pickup : MonoBehaviour
 {
-    public enum Kind { Shield }
+    public enum Kind { Shield, Ember }
 
     static readonly List<Pickup> all = new List<Pickup>();
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -24,8 +24,8 @@ public class Pickup : MonoBehaviour
     SortingGroup group;
     bool settled;
 
-    static string SpriteFor(Kind k) { return k == Kind.Shield ? "s_shield" : "ui_coin"; }
-    static string LabelFor(Kind k) { return k == Kind.Shield ? "Take Shield" : "Take"; }
+    static string SpriteFor(Kind k) { return k == Kind.Shield ? "s_shield" : k == Kind.Ember ? "ui_ember" : "ui_coin"; }
+    static string LabelFor(Kind k) { return k == Kind.Shield ? "Take Shield" : k == Kind.Ember ? "Take Ember" : "Take"; }
 
     public static Pickup Drop(Kind kind, Vector2 at, int facing)
     {
@@ -38,6 +38,8 @@ public class Pickup : MonoBehaviour
         p.glow = Art.New("fx_glow", go.transform, new Vector3(0, .12f, 0), -2, "Default", true);
         p.glow.color = new Color(1f, .74f, .34f, 0f);
         p.body = Art.New(SpriteFor(kind), go.transform, new Vector3(0, .3f, 0), 1);
+        // The ember sprite is a HUD icon, far smaller on the ground than a shield.
+        if (kind == Kind.Ember) p.body.transform.localScale = Vector3.one * (.62f / Mathf.Max(.01f, p.body.sprite.bounds.size.y));
         p.z = .35f; p.vz = 4.6f; p.hop = new Vector2(facing * 1.7f, 0);
         go.transform.position = World.Project(at);
         return p;

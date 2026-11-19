@@ -34,3 +34,8 @@ Packages/*.bak
 # Python bytecode from AgentScripts
 __pycache__/
 *.pyc
+
+# Screenshots captured while testing. Scratch output of a session, not the game.
+/Screenshots/hpbar/
+/Screenshots/tut/
+/Screenshots/merge/

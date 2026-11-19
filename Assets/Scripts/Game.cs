@@ -10,11 +10,13 @@ public class Game : MonoBehaviour
     public static Game I;
     public enum State { Title, Playing, Dead, Victory }
     public State state = State.Title;
-    public Player player; public Companion khalid; public Hud hud;
+    public Player player; public Companion jaren; public Hud hud;
     public int maxTokens = 2;
     public int Cinders { get; private set; }
     public int Experience { get; private set; }
     public bool HasShield { get; private set; }
+    public bool HasEmbers { get; private set; }
+    public bool HasSlam { get; private set; }
 
     // Levelling: each one costs a flat step more than the last, so early levels
     // come fast enough to feel like progress and later ones still mean something.
@@ -38,6 +40,8 @@ public class Game : MonoBehaviour
         PlayerPrefs.SetInt("Emberclad.Cinders", Cinders);
         PlayerPrefs.SetInt("Emberclad.Experience", Experience);
         PlayerPrefs.SetInt("Emberclad.Shield", HasShield ? 1 : 0);
+        PlayerPrefs.SetInt("Emberclad.Embers", HasEmbers ? 1 : 0);
+        PlayerPrefs.SetInt("Emberclad.Slam", HasSlam ? 1 : 0);
         PlayerPrefs.Save();
         rewardsDirty = false;
     }
@@ -50,7 +54,10 @@ public class Game : MonoBehaviour
     class Enc { public float x; public string[] waves; public Enc(float x, string w) { this.x = x; waves = w.Split('|'); } }
     readonly Enc[] encs =
     {
-        new Enc(16f, "G3"),
+        // The opening encounter is the tutorial: three rounds, one new thing each,
+        // each taught by a card and then left alone. The last kill of rounds one and
+        // two drops the gear the next round is about.
+        new Enc(16f, "G2|G2 R1|G3|R2 G2"),
         new Enc(37f, "G2 R1|G3 R1"),
         new Enc(59f, "R3|G2 B1|G3 R1"),
         new Enc(83f, "G1 R2|G2 B1|B1 R3"),
@@ -58,6 +65,35 @@ public class Game : MonoBehaviour
         new Enc(129f, "X1"),
     };
     int encIdx, wave; bool inEnc, spawning, bossDead, paused, slowmo; float waveDelay, hitStop, stateT, campfirePrompt;
+    // While a tutorial drop is on the floor the next round waits for it. The timeout
+    // only exists so a pickup that somehow cannot be reached can never deadlock a run.
+    Pickup tutorialDrop; float tutorialHold;
+    /// The one place the tutorial takes the player by the hand: the wheel is not
+    /// discoverable by flailing, so the round after the ember waits until they have
+    /// actually held the key, picked the ember out of it, and put the blade back.
+    public enum Lesson { None, EquipEmber, BackToBlade }
+    Lesson lesson;
+    public bool LessonActive { get { return lesson != Lesson.None; } }
+
+    void TickLesson()
+    {
+        if (lesson == Lesson.None || hud == null) return;
+        if (lesson == Lesson.EquipEmber && QuickItems.Selected == 2)
+        {
+            lesson = Lesson.BackToBlade;
+            Sfx.Play("mana", .5f, 0, 1.4f);
+            hud.TeachCard("Ember In Hand",
+                "The wheel holds whatever you find. Put the blade back the same way.",
+                new[] { "G" }, new[] { "Hold, aim up for the sword, release" }, 60f);
+        }
+        else if (lesson == Lesson.BackToBlade && QuickItems.Selected == 0)
+        {
+            lesson = Lesson.None;
+            hud.DemoHotbar(false);
+            Sfx.Play("mana", .55f, 0, 1.55f);
+            hud.TeachCard("Ready", "Embers cost blood. Spend them when it is worth the price.", null, null, 4.5f);
+        }
+    }
     readonly List<Enemy> alive = new List<Enemy>(); Enemy boss;
     public bool CanUseItems => state == State.Playing && !paused && player != null && !player.dead && hud != null && !hud.IntroOpen;
     public bool InCombat => inEnc;
@@ -71,6 +107,8 @@ public class Game : MonoBehaviour
         Cinders = PlayerPrefs.GetInt("Emberclad.Cinders", 0);
         Experience = PlayerPrefs.GetInt("Emberclad.Experience", 0);
         HasShield = PlayerPrefs.GetInt("Emberclad.Shield", 0) == 1;
+        HasEmbers = PlayerPrefs.GetInt("Emberclad.Embers", 0) == 1;
+        HasSlam = PlayerPrefs.GetInt("Emberclad.Slam", 0) == 1;
         I = this; Time.timeScale = 1; Enemy.tokens = 0; Actor.All.Clear();
         Application.targetFrameRate = 60;
         Art.Load();
@@ -84,7 +122,7 @@ public class Game : MonoBehaviour
         encIdx = Mathf.Clamp(checkpoint, 0, encs.Length - 1);
         float startX = checkpoint > 0 ? encs[encIdx].x - 7f : 0.5f;
         player = Player.Create(new Vector2(startX, -2.6f));
-        khalid = Companion.Create(new Vector2(startX - 1.1f, -2.3f));
+        jaren = Companion.Create(new Vector2(startX - 1.1f, -2.3f));
         hud = new GameObject("HUD").AddComponent<Hud>(); hud.Build(this);
         rig.SnapTo(startX + 1.4f);
         if (encIdx >= 3) maxTokens = 3;
@@ -117,6 +155,7 @@ public class Game : MonoBehaviour
                 if (!hud.IntroOpen && !hud.PauseMenuOpen && GameInput.Help) { paused = !paused; hud.ShowHelp(paused); }
                 if (paused) break;
                 runTime += Time.deltaTime;
+                TickLesson();
                 TickEncounters();
                 break;
             case State.Dead:
@@ -153,9 +192,17 @@ public class Game : MonoBehaviour
         alive.RemoveAll(e => e == null || e.dead);
         if (alive.Count > 0) return;
         if (encs[encIdx].waves[0] == "X1") return;   // boss fight ends through OnBossDead
+        if (tutorialDrop != null)
+        {
+            tutorialHold -= Time.deltaTime;
+            if (tutorialHold > 0f) return;
+            tutorialDrop = null;
+        }
+        if (lesson != Lesson.None) return;
         waveDelay -= Time.deltaTime;
         if (waveDelay > 0) return;
         wave++;
+        if (encIdx == 0 && wave == 3 && !HasSlam) StartCoroutine(TeachSlam());
         if (wave < encs[encIdx].waves.Length) StartCoroutine(SpawnWave(encs[encIdx].waves[wave], encs[encIdx].x + 2f));
         else EndEncounter();
     }
@@ -166,7 +213,38 @@ public class Game : MonoBehaviour
         CameraRig.I.Lock(center); Sfx.drumsTarget = 0.5f; hud.HideGo();
         if (encIdx >= 3) maxTokens = 3;
         if (e.waves[0] == "X1") StartCoroutine(BossIntro(center));
-        else { StartCoroutine(SpawnWave(e.waves[0], center)); if (encIdx == 0) hud.Banner("SKELETONS!", 1.6f); }
+        else
+        {
+            StartCoroutine(SpawnWave(e.waves[0], center));
+            if (encIdx == 0) { hud.Banner("SKELETONS!", 1.6f); StartCoroutine(TeachBlade()); }
+        }
+    }
+
+    /// The first lesson has no pickup to hang off, so it rides in behind the banner
+    /// while the first two grunts are still walking in. Shown once per profile.
+    IEnumerator TeachBlade()
+    {
+        if (PlayerPrefs.GetInt("Emberclad.TaughtBlade", 0) != 0) yield break;
+        PlayerPrefs.SetInt("Emberclad.TaughtBlade", 1); PlayerPrefs.Save();
+        yield return new WaitForSeconds(1.7f);
+        if (hud == null) yield break;
+        hud.TeachCard("The Blade", "Heavy blows break a raised guard. Both cost stamina.",
+                      new[] { "J", "K" },
+                      new[] { "Light attack   or left click", "Heavy attack   or right click" });
+    }
+
+    /// The fourth round is the only one whose lesson is a technique rather than a
+    /// thing on the floor, so it arrives with the wave instead of before it.
+    IEnumerator TeachSlam()
+    {
+        yield return new WaitForSeconds(.9f);
+        HasSlam = true;
+        if (!rewardsDirty) rewardSaveTimer = 2f;
+        rewardsDirty = true;
+        if (hud == null) yield break;
+        hud.TeachCard("Down Like A Hammer",
+            "It lands in a ring, so it catches what a swing would miss.",
+            new[] { "SPACE", "K" }, new[] { "Jump", "Heavy, while airborne" }, 8f);
     }
 
     IEnumerator SpawnWave(string spec, float center)
@@ -226,7 +304,15 @@ public class Game : MonoBehaviour
         inEnc = false; encIdx++; checkpoint = Mathf.Max(checkpoint, encIdx);
         CameraRig.I.Unlock(); Sfx.drumsTarget = 0f; hud.ShowGo();
         Sfx.Play("mana", 0.5f, 0, 1.2f);
-        khalid.Cheer(1.5f);
+        jaren.Cheer(1.5f);
+    }
+
+    /// Health siphoned off a corpse, paid out one mote at a time as the HUD's embers
+    /// land on the bar. The player's hp stays the single source of truth.
+    public void GrantSiphon(int amount)
+    {
+        if (player == null || player.dead || amount <= 0) return;
+        player.hp = Mathf.Min(player.maxHp, player.hp + amount);
     }
 
     public void OnEnemyKilled(Enemy e)
@@ -236,6 +322,10 @@ public class Game : MonoBehaviour
         player.kills++; runKills++;
         int cinders = e.IsBoss ? 250 : e.kind == Enemy.Kind.Brute ? 30 : e.kind == Enemy.Kind.Runt ? 5 : 10;
         int xp = e.IsBoss ? 500 : e.kind == Enemy.Kind.Brute ? 60 : e.kind == Enemy.Kind.Runt ? 10 : 20;
+        // Siphon: a sip of life off the corpse, scaled to how formidable it was. Kept
+        // deliberately tiny -- a grunt is worth a fiftieth of the bar. It is a reward
+        // for the kill, not a way to sustain through a fight.
+        int siphon = e.IsBoss ? 15 : e.kind == Enemy.Kind.Brute ? 4 : e.kind == Enemy.Kind.Runt ? 1 : 2;
         int before = Level;
         Cinders += cinders;
         Experience += xp;
@@ -247,11 +337,26 @@ public class Game : MonoBehaviour
             // coins, the warden is a fountain.
             float weight = e.IsBoss ? 1f : e.kind == Enemy.Kind.Brute ? .55f : e.kind == Enemy.Kind.Runt ? 0f : .25f;
             hud.BurstCinders(e.transform.position + new Vector3(0, .9f, 0), cinders, weight);
+            hud.BurstSiphon(e.transform.position + new Vector3(0, .9f, 0), siphon, weight);
             hud.ShowRewards(cinders, xp);
-            if (Level > before) { hud.Banner("LEVEL " + Level, 2f); Sfx.Play("mana", .7f, 0, 1.15f); }
+            if (Level > before)
+            {
+                // A level is a full restock: the coals go back to the end of the bar
+                // and the belt is refilled, so levelling is the pacing beat that lets
+                // you spend health on Embers again.
+                player.hp = player.maxHp;
+                player.potions = 3;
+                hud.Banner("LEVEL " + Level, 2f);
+                hud.LevelRestore();
+                Sfx.Play("mana", .7f, 0, 1.15f);
+            }
         }
-        // Shield-bearers leave the shield behind. It is the only thing they had.
-        if (e.hasShield && !HasShield)
+        TutorialDrop(e);
+        // Shield-bearers leave the shield behind. It is the only thing they had. Not in
+        // the tutorial encounter though: a second shield off a random guard mid-round
+        // pre-empts the scripted drop the next round is built around, and the player
+        // ends up with two on the floor.
+        if (e.hasShield && !HasShield && encIdx != 0)
         {
             Pickup.Drop(Pickup.Kind.Shield, e.pos, e.pos.x < player.pos.x ? -1 : 1);
             e.ReleaseShield();
@@ -260,14 +365,49 @@ public class Game : MonoBehaviour
 
     public void OnPickup(Pickup.Kind kind)
     {
+        tutorialDrop = null;
+        if (!rewardsDirty) rewardSaveTimer = 2f;
+        rewardsDirty = true;
         if (kind == Pickup.Kind.Shield)
         {
             HasShield = true;
-            if (!rewardsDirty) rewardSaveTimer = 2f;
-            rewardsDirty = true;
             if (player != null) player.EquipShield();
-            if (hud != null) hud.Banner("SHIELD RECOVERED", 2.2f);
+            if (hud != null) hud.TeachCard("Shield Recovered",
+                "Raise it as a blow lands and you parry instead of blocking.",
+                new[] { "SHIFT" }, new[] { "Hold to guard" });
         }
+        else if (kind == Pickup.Kind.Ember)
+        {
+            HasEmbers = true;
+            if (hud != null)
+            {
+                lesson = Lesson.EquipEmber;
+                hud.DemoHotbar(true);
+                hud.TeachCard("Ember Burst",
+                    "Paid for in blood, not charges. Roughly seven from a full bar.",
+                    new[] { "G", "L" }, new[] { "Hold, aim down for the ember, release", "Or cast it outright" }, 60f);
+            }
+        }
+    }
+
+    /// True when this corpse was the last thing standing in the round.
+    bool LastOfWave(Enemy e)
+    {
+        if (spawning) return false;
+        foreach (var other in alive) if (other != null && !other.dead && other != e) return false;
+        return true;
+    }
+
+    /// The tutorial rounds hand over the gear the next round is about. Only ever drops
+    /// what the player does not already have, so a returning knight is not handed a
+    /// second shield or re-taught something they know.
+    void TutorialDrop(Enemy e)
+    {
+        if (encIdx != 0 || !LastOfWave(e)) return;
+        int dir = e.pos.x < player.pos.x ? -1 : 1;
+        if (wave == 0 && !HasShield) tutorialDrop = Pickup.Drop(Pickup.Kind.Shield, e.pos, dir);
+        else if (wave == 1 && !HasEmbers) tutorialDrop = Pickup.Drop(Pickup.Kind.Ember, e.pos, dir);
+        if (tutorialDrop != null) tutorialHold = 30f;
     }
 
     public void OnBossDead(Enemy b) { StartCoroutine(BossDeathSeq(b)); }
@@ -282,12 +422,12 @@ public class Game : MonoBehaviour
         if (b != null) b.BossBurst(true);
         yield return new WaitForSecondsRealtime(0.8f);
         bossDead = true; inEnc = false; encIdx = encs.Length; CameraRig.I.Unlock();
-        hud.Banner("LIGHT THE CAMPFIRE", 2.6f); hud.ShowGo(); khalid.Cheer(2f);
+        hud.Banner("LIGHT THE CAMPFIRE", 2.6f); hud.ShowGo(); jaren.Cheer(2f);
     }
 
     void Victory()
     {
-        state = State.Victory; stateT = 0; player.Celebrate(); khalid.Cheer(60f);
+        state = State.Victory; stateT = 0; player.Celebrate(); jaren.Cheer(60f);
         Sfx.Play("victory", 0.8f, 0); Sfx.Play("boom", 0.6f, 0, 1.4f);
         World.shrine.GetComponent<EndCampfire>().Light();
         Vector2 s = (Vector2)World.shrine.position + new Vector2(0, .45f);
@@ -340,6 +480,6 @@ public class Game : MonoBehaviour
     public string DebugInfo()
     {
         alive.RemoveAll(e => e == null);
-        return $"state={state} enc={encIdx} inEnc={inEnc} wave={wave} alive={alive.Count} hp={player.hp} mana={player.mana} px={player.pos.x:F1} py={player.pos.y:F1} st={player.st} kills={runKills} t={runTime:F1} tokens={Enemy.tokens}";
+        return $"state={state} enc={encIdx} inEnc={inEnc} wave={wave} alive={alive.Count} hp={player.hp} castsLeft={(player.hp - 1) / player.EmberCost} px={player.pos.x:F1} py={player.pos.y:F1} st={player.st} kills={runKills} t={runTime:F1} tokens={Enemy.tokens}";
     }
 }

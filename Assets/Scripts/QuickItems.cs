@@ -14,13 +14,15 @@ public static class QuickItems
     static Vector2 motion, center;
 
     // Screen directions of the four wells as the HUD draws them: top, right,
-    // bottom, left. Only the first two hold anything, and the two empty ones
-    // happen to point down and left -- straight at the corner the wheel itself
-    // is drawn in. Aiming that way used to resolve to an empty well and then do
+    // bottom, left. Only the first three hold anything (sword, potion, embers),
+    // and the empty one points left -- straight at the corner the wheel itself is
+    // drawn in. Aiming that way used to resolve to an empty well and then do
     // nothing on release, which read as the hotbar simply going dead whenever
-    // the mouse drifted toward it. Only filled slots are aimable now.
+    // the mouse drifted toward it. Only filled slots are aimable.
     static readonly Vector2[] slotDirs = { Vector2.up, Vector2.right, Vector2.down, Vector2.left };
-    public const int Filled = 2;
+    /// Three slots once Embers are found, two before: an empty well you can aim at
+    /// is the hotbar going dead under your hand.
+    public static int Filled { get { return Game.I != null && Game.I.HasEmbers ? 3 : 2; } }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     static void Reset()

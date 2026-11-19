@@ -8,7 +8,7 @@ public class Companion : Actor
 
     public static Companion Create(Vector2 at)
     {
-        var go = new GameObject("Khalid"); var c = go.AddComponent<Companion>();
+        var go = new GameObject("Jaren"); var c = go.AddComponent<Companion>();
         c.pos = at; c.radius = 0.2f; c.scale = 0.95f; c.BaseSetup(0.75f);
         var v = c.visual;
         c.legs[1] = Rig.Part(v, "p_leg", new Vector2(-0.13f, 0.19f), 0); c.legs[3] = Rig.Part(v, "p_leg", new Vector2(0.23f, 0.19f), 0);

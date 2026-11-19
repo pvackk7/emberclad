@@ -1,0 +1,36 @@
+# Unity-generated folders: rebuilt automatically, never commit (Library alone is GBs)
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+*.csproj
+*.sln
+*.pidb
+*.booproj
+*.userprefs
+.vs/
+.vscode/
+.idea/
+
+# macOS / exFAT drive clutter
+._*
+.DS_Store
+
+# Local junk and old copies
+/_Removed/
+*.tar.gz
+*.zip
+
+# Agent pipeline scratch output (kept on disk, not in history)
+/generated_images/
+/pipeline_queue/
+/pipeline_check_output.json
+Packages/*.bak
+
+# Python bytecode from AgentScripts
+__pycache__/
+*.pyc

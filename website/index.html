@@ -28,12 +28,12 @@
   .shade{position:absolute;inset:0;pointer-events:none;background:
       radial-gradient(ellipse at 50% 45%,rgba(7,7,10,0) 35%,rgba(7,7,10,.7) 100%),
       linear-gradient(to bottom,rgba(7,7,10,.25) 0%,rgba(7,7,10,0) 35%,rgba(7,7,10,.55) 72%,var(--bg) 100%)}
-  h1{position:absolute;left:50%;bottom:clamp(110px,19vh,210px);transform:translateX(-50%);margin:0;width:min(74vw,1050px);
+  h1{position:absolute;left:50%;bottom:clamp(96px,16vh,180px);transform:translateX(-50%);margin:0;width:min(74vw,1050px);
      filter:drop-shadow(0 6px 24px rgba(0,0,0,.85))}
   h1 img{display:block;width:100%;height:auto}
 
   /* ARROW */
-  .descend{position:absolute;left:50%;bottom:clamp(22px,5vh,52px);transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:10px;
+  .descend{position:absolute;left:0;right:0;margin:0 auto;width:max-content;bottom:clamp(10px,2.2vh,22px);bottom:calc(clamp(10px,2.2vh,22px) + env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:center;gap:10px;
            color:var(--gold);text-decoration:none;opacity:.8;transition:opacity .4s}
   .descend:hover,.descend:focus-visible{opacity:1;outline:none}
   .descend span{font-family:Cinzel,serif;font-size:.62rem;letter-spacing:.45em;padding-left:.45em;color:var(--dim);transition:color .4s}

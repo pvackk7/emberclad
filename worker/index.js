@@ -288,7 +288,7 @@ async function serveGameFile(request, env, url) {
   if (!path.endsWith('.br')) return env.ASSETS.fetch(request);
   const inner = path.slice(0, -3);
   const type = GAME_TYPES[inner.slice(inner.lastIndexOf('.'))] || 'application/octet-stream';
-  const headers = { 'Content-Type': type, 'Content-Encoding': 'br', 'Cache-Control': 'public, max-age=3600' };
+  const headers = { 'Content-Type': type, 'Content-Encoding': 'br', 'Cache-Control': url.searchParams.has('v') ? 'public, max-age=31536000, immutable' : 'no-cache' };
 
   const whole = await assetOrNull(env, request, path);
   if (whole) {

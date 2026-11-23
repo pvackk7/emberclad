@@ -209,11 +209,13 @@
     startBtn.addEventListener('click', function () {
       if (location.protocol === 'file:') { startBtn.querySelector('.label').textContent = 'OPEN THE SITE FROM A SERVER TO PLAY'; startBtn.classList.add('nudge'); setTimeout(function () { startBtn.classList.remove('nudge'); }, 600); return; }
       startBtn.hidden = true; loading.hidden = false;
-      var b = '/play/Build/WebGL_staging';
-      var sc = document.createElement('script'); sc.src = b + '.loader.js';
+      // Bump BUILD whenever a new game build is copied in, so browsers fetch the new files.
+      var BUILD = '20261123-0851', b = '/play/Build/WebGL_staging', v = '?v=' + BUILD;
+      var sc = document.createElement('script'); sc.src = b + '.loader.js' + v;
       sc.onload = function () {
         createUnityInstance(canvas, {
-          dataUrl: b + '.data.br', frameworkUrl: b + '.framework.js.br', codeUrl: b + '.wasm.br',
+          dataUrl: b + '.data.br' + v, frameworkUrl: b + '.framework.js.br' + v, codeUrl: b + '.wasm.br' + v,
+          cacheControl: function () { return 'no-store'; },
           streamingAssetsUrl: '/play/StreamingAssets', companyName: 'Emberclad', productName: 'Emberclad', productVersion: '1.0',
           showBanner: function (m, t) { if (t === 'error') console.error(m); }
         }, function (p) { fill.style.width = Math.round(p * 100) + '%'; }).then(function (inst) {

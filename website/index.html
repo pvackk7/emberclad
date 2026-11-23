@@ -210,7 +210,7 @@
       if (location.protocol === 'file:') { startBtn.querySelector('.label').textContent = 'OPEN THE SITE FROM A SERVER TO PLAY'; startBtn.classList.add('nudge'); setTimeout(function () { startBtn.classList.remove('nudge'); }, 600); return; }
       startBtn.hidden = true; loading.hidden = false;
       // Bump BUILD whenever a new game build is copied in, so browsers fetch the new files.
-      var BUILD = '20261123-0851', b = '/play/Build/WebGL_staging', v = '?v=' + BUILD;
+      var BUILD = '20261123-085023', b = '/play/Build/WebGL_staging', v = '?v=' + BUILD;
       var sc = document.createElement('script'); sc.src = b + '.loader.js' + v;
       sc.onload = function () {
         createUnityInstance(canvas, {

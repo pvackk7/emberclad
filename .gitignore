@@ -27,3 +27,4 @@ __pycache__/
 # Unity generated meta junk occasionally left by crashes
 sysinfo.txt
 *.tmp
+.wrangler/

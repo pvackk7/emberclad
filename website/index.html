@@ -66,6 +66,8 @@
   .start svg{width:clamp(64px,9vw,92px);height:auto;filter:drop-shadow(0 0 14px rgba(201,184,122,.35));transition:transform .5s,filter .5s}
   .start:hover svg,.start:focus-visible svg{transform:scale(1.07);filter:drop-shadow(0 0 22px rgba(201,184,122,.6))}
   .start:focus-visible{outline:none}
+  .start.nudge svg{animation:nudge .5s}
+  @keyframes nudge{20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
   .start .label,.loading .label{font-family:Cinzel,serif;letter-spacing:.4em;padding-left:.4em;font-size:clamp(.75rem,1.6vw,.95rem);color:#d8cdb4}
   .loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px}
   .loading[hidden],.fs[hidden],.start[hidden]{display:none}
@@ -193,7 +195,7 @@
     var game = document.getElementById('game'), startBtn = document.getElementById('start'), loading = document.getElementById('loading'),
         fill = document.getElementById('fill'), fsBtn = document.getElementById('fs'), canvas = document.getElementById('unity-canvas'), unity = null;
     startBtn.addEventListener('click', function () {
-      if (location.protocol === 'file:') { startBtn.querySelector('.label').textContent = 'PLAYS ON EMBERCLAD.ORG'; return; }
+      if (location.protocol === 'file:') { startBtn.querySelector('.label').textContent = 'OPEN THE SITE FROM A SERVER TO PLAY'; startBtn.classList.add('nudge'); setTimeout(function () { startBtn.classList.remove('nudge'); }, 600); return; }
       startBtn.hidden = true; loading.hidden = false;
       var b = '/play/Build/WebGL_staging';
       var sc = document.createElement('script'); sc.src = b + '.loader.js';

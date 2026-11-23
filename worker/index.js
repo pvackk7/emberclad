@@ -38,7 +38,26 @@ async function ensureSchema(db) {
     db.prepare(`CREATE INDEX IF NOT EXISTS runs_board ON runs (run_ms) WHERE finished_at IS NOT NULL`),
     db.prepare(`CREATE UNIQUE INDEX IF NOT EXISTS runs_nick_done ON runs (nickname_key) WHERE finished_at IS NOT NULL`),
     db.prepare(`CREATE INDEX IF NOT EXISTS runs_ip_start ON runs (ip_hash, started_at)`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      pass_hash TEXT NOT NULL,
+      salt TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS sessions (
+      token_hash TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      expires_at INTEGER NOT NULL
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS auth_failures (ip_hash TEXT NOT NULL, at INTEGER NOT NULL)`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS auth_failures_ip ON auth_failures (ip_hash, at)`),
   ]);
+  const cols = await db.prepare(`PRAGMA table_info(runs)`).all();
+  if (!cols.results.some(c => c.name === 'user_id')) {
+    await db.prepare(`ALTER TABLE runs ADD COLUMN user_id TEXT`).run();
+  }
+  await db.prepare(`CREATE INDEX IF NOT EXISTS runs_user ON runs (user_id, finished_at)`).run();
   schemaReady = true;
 }
 
@@ -90,8 +109,9 @@ async function startRun(request, env) {
   if (recent && recent.n >= STARTS_PER_HOUR_PER_IP) return err(429, 'Too many runs started from here. Try again later.');
 
   const runId = randomHex(12), token = randomHex(24);
-  await env.DB.prepare('INSERT INTO runs (id, token_hash, nickname, nickname_key, ip_hash, started_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(runId, await sha256(token), nickname, key, ipHash, now).run();
+  const user = await currentUser(request, env);
+  await env.DB.prepare('INSERT INTO runs (id, token_hash, nickname, nickname_key, ip_hash, started_at, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(runId, await sha256(token), nickname, key, ipHash, now, user ? user.id : null).run();
   return json({ runId, token, startedAt: now });
 }
 
@@ -138,6 +158,120 @@ async function leaderboard(url, env) {
   return json({ entries }, 200, { 'Cache-Control': 'public, max-age=15' });
 }
 
+// ---- Accounts (email + password, session cookie) ----
+const SESSION_COOKIE = 'ec_session';
+const SESSION_DAYS = 30;
+const PBKDF2_ITER = 100000;
+const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,24}$/;
+
+async function hashPassword(password, saltHex) {
+  const salt = new Uint8Array(saltHex.match(/../g).map(h => parseInt(h, 16)));
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: PBKDF2_ITER }, key, 256);
+  return [...new Uint8Array(bits)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+function safeEqual(a, b) {
+  if (a.length !== b.length) return false;
+  let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+}
+function getCookie(request, name) {
+  const m = (request.headers.get('cookie') || '').match(new RegExp('(?:^|;\\s*)' + name + '=([^;]+)'));
+  return m ? m[1] : null;
+}
+function sessionCookie(request, value, maxAge) {
+  const secure = new URL(request.url).protocol === 'https:' ? '; Secure' : '';
+  return `${SESSION_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+}
+async function currentUser(request, env) {
+  const token = getCookie(request, SESSION_COOKIE);
+  if (!token || !/^[0-9a-f]{64}$/.test(token)) return null;
+  return await env.DB.prepare(
+    'SELECT u.id, u.email FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?'
+  ).bind(await sha256(token), Date.now()).first();
+}
+async function ipHashOf(request, env) {
+  return sha256((request.headers.get('cf-connecting-ip') || 'local') + '|' + (env.IP_SALT || 'emberclad'));
+}
+async function tooManyFailures(request, env) {
+  const r = await env.DB.prepare('SELECT COUNT(*) AS n FROM auth_failures WHERE ip_hash = ? AND at > ?')
+    .bind(await ipHashOf(request, env), Date.now() - 15 * 60 * 1000).first();
+  return r && r.n >= 10;
+}
+async function noteFailure(request, env) {
+  const now = Date.now();
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO auth_failures (ip_hash, at) VALUES (?, ?)').bind(await ipHashOf(request, env), now),
+    env.DB.prepare('DELETE FROM auth_failures WHERE at < ?').bind(now - 24 * 3600 * 1000),
+  ]);
+}
+async function startSession(request, env, user) {
+  const token = randomHex(32), now = Date.now();
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)').bind(await sha256(token), user.id, now + SESSION_DAYS * 86400000),
+    env.DB.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(now),
+  ]);
+  return json({ user: { email: user.email } }, 200, { 'Set-Cookie': sessionCookie(request, token, SESSION_DAYS * 86400) });
+}
+function readCreds(body) {
+  if (!body) return null;
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+  const password = typeof body.password === 'string' ? body.password : '';
+  return { email, password };
+}
+
+async function signup(request, env) {
+  if (await tooManyFailures(request, env)) return err(429, 'Too many attempts. Try again in a few minutes.');
+  const c = readCreds(await readJson(request));
+  if (!c || !EMAIL_RE.test(c.email) || c.email.length > 254) return err(400, 'Enter a valid email address');
+  if (c.password.length < 8 || c.password.length > 200) return err(400, 'Password must be at least 8 characters');
+  const exists = await env.DB.prepare('SELECT 1 FROM users WHERE email = ?').bind(c.email).first();
+  if (exists) { await noteFailure(request, env); return err(409, 'An account with that email already exists'); }
+  const user = { id: randomHex(12), email: c.email };
+  const salt = randomHex(16);
+  try {
+    await env.DB.prepare('INSERT INTO users (id, email, pass_hash, salt, created_at) VALUES (?, ?, ?, ?, ?)')
+      .bind(user.id, c.email, await hashPassword(c.password, salt), salt, Date.now()).run();
+  } catch (e) {
+    if (String(e).includes('UNIQUE')) return err(409, 'An account with that email already exists');
+    throw e;
+  }
+  return startSession(request, env, user);
+}
+
+async function login(request, env) {
+  if (await tooManyFailures(request, env)) return err(429, 'Too many attempts. Try again in a few minutes.');
+  const c = readCreds(await readJson(request));
+  if (!c || !c.email || !c.password) return err(400, 'Enter your email and password');
+  const row = await env.DB.prepare('SELECT id, email, pass_hash, salt FROM users WHERE email = ?').bind(c.email).first();
+  const hash = await hashPassword(c.password, row ? row.salt : '00'.repeat(16));
+  if (!row || !safeEqual(hash, row.pass_hash)) { await noteFailure(request, env); return err(401, 'Wrong email or password'); }
+  return startSession(request, env, row);
+}
+
+async function logout(request, env) {
+  const token = getCookie(request, SESSION_COOKIE);
+  if (token && /^[0-9a-f]{64}$/.test(token)) await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await sha256(token)).run();
+  return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie(request, '', 0) });
+}
+
+async function me(request, env) {
+  const user = await currentUser(request, env);
+  return json({ user: user ? { email: user.email } : null }, 200, { 'Cache-Control': 'no-store' });
+}
+
+async function myRuns(request, env) {
+  const user = await currentUser(request, env);
+  if (!user) return err(401, 'Log in to see your runs');
+  const { results } = await env.DB.prepare(
+    `SELECT r.nickname, r.run_ms, r.deaths, r.finished_at,
+            (SELECT COUNT(*) FROM runs o WHERE o.finished_at IS NOT NULL AND (o.run_ms < r.run_ms OR (o.run_ms = r.run_ms AND o.finished_at < r.finished_at))) + 1 AS rank
+       FROM runs r WHERE r.user_id = ? AND r.finished_at IS NOT NULL ORDER BY r.run_ms ASC LIMIT 200`
+  ).bind(user.id).all();
+  return json({ user: { email: user.email }, runs: results.map(r => ({ nickname: r.nickname, runMs: r.run_ms, deaths: r.deaths, finishedAt: r.finished_at, rank: r.rank })) },
+    200, { 'Cache-Control': 'no-store' });
+}
+
 // ---- Browser game files (website/play/Build) ----
 // Unity's Brotli files need Content-Encoding: br. Files over Cloudflare's 25 MiB asset limit are stored
 // as name.part0, name.part1, ... and streamed back together here.
@@ -179,14 +313,31 @@ async function serveGameFile(request, env, url) {
   return new Response(readable, { headers, encodeBody: 'manual' });
 }
 
+async function routePrivate(url, request, env) {
+  if (url.pathname === '/api/auth/signup' && request.method === 'POST') return signup(request, env);
+  if (url.pathname === '/api/auth/login' && request.method === 'POST') return login(request, env);
+  if (url.pathname === '/api/auth/logout' && request.method === 'POST') return logout(request, env);
+  if (url.pathname === '/api/auth/me' && request.method === 'GET') return me(request, env);
+  if (url.pathname === '/api/me/runs' && request.method === 'GET') return myRuns(request, env);
+  return err(404, 'Not found');
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname.startsWith('/play/Build/')) return serveGameFile(request, env, url);
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
-    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+    const privateApi = url.pathname.startsWith('/api/auth/') || url.pathname.startsWith('/api/me/');
+    if (request.method === 'OPTIONS') return privateApi ? new Response(null, { status: 204 }) : new Response(null, { status: 204, headers: CORS });
+    if (privateApi && request.method === 'POST' && !(request.headers.get('content-type') || '').startsWith('application/json'))
+      return err(415, 'JSON required');
     try {
       await ensureSchema(env.DB);
+      if (privateApi) {
+        const res = await routePrivate(url, request, env);
+        const h = new Headers(res.headers); Object.keys(CORS).forEach(k => h.delete(k));
+        return new Response(res.body, { status: res.status, headers: h });
+      }
       if (url.pathname === '/api/runs/start' && request.method === 'POST') return await startRun(request, env);
       if (url.pathname === '/api/runs/finish' && request.method === 'POST') return await finishRun(request, env);
       if (url.pathname === '/api/leaderboard' && request.method === 'GET') return await leaderboard(url, env);

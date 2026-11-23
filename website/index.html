@@ -19,6 +19,13 @@
   html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"EB Garamond",Georgia,serif}
   body{overflow-x:hidden}
 
+  .topbar{position:fixed;top:0;left:0;right:0;z-index:20;height:52px;display:flex;align-items:center;justify-content:flex-end;
+          padding:0 clamp(14px,3vw,32px);padding-top:env(safe-area-inset-top);background:rgba(5,5,7,.82);
+          -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  .profile{width:36px;height:36px;display:grid;place-items:center;color:var(--ink);border:1px solid transparent;border-radius:50%;transition:color .3s,border-color .3s}
+  .profile:hover,.profile:focus-visible{color:var(--gold);border-color:var(--line);outline:none}
+  .profile svg{width:22px;height:22px}
+  .profile.in{color:var(--gold)}
   /* HERO */
   .stage{position:relative;height:100vh;height:100svh;overflow:hidden;background:var(--bg) url(img/video-poster.jpg) center/cover no-repeat}
   .stage video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;filter:saturate(.85)}
@@ -112,6 +119,11 @@
 <script>document.documentElement.className='js'</script>
 </head>
 <body>
+<nav class="topbar" aria-label="Site">
+  <a class="profile" id="profile" href="/account/" aria-label="Account">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="8.5" r="4"/><path d="M4 20.5c1.4-3.8 4.4-5.6 8-5.6s6.6 1.8 8 5.6"/></svg>
+  </a>
+</nav>
 <header class="stage">
   <video id="bg" autoplay muted loop playsinline webkit-playsinline disablepictureinpicture disableremoteplayback preload="auto" poster="img/video-poster.jpg" aria-hidden="true" tabindex="-1">
     <source src="video/emberclad-demo.mp4" type="video/mp4">
@@ -215,6 +227,21 @@
     });
     game.addEventListener('pointerdown', function () { if (unity) canvas.focus(); });
     fsBtn.addEventListener('click', function () { if (unity) unity.SetFullscreen(1); });
+    // Called by the WebGL build when the player exits from its main menu: tear down the game and show the Play button again.
+    window.EmbercladExit = function () {
+      var done = function () {
+        var fresh = document.createElement('canvas');
+        fresh.id = 'unity-canvas'; fresh.tabIndex = -1; fresh.setAttribute('aria-label', 'Emberclad game');
+        canvas.replaceWith(fresh); canvas = fresh; unity = null;
+        game.classList.remove('running'); fsBtn.hidden = true; loading.hidden = true; fill.style.width = '0';
+        loading.querySelector('.label').textContent = 'KINDLING\u2026'; startBtn.hidden = false;
+        if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen();
+      };
+      if (unity) { var u = unity; unity = null; u.Quit().then(done, done); } else done();
+    };
+    fetch('/api/auth/me', { cache: 'no-store', credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {
+      if (d && d.user) { var pf = document.getElementById('profile'); pf.classList.add('in'); pf.title = d.user.email; }
+    }).catch(function () {});
     // Leaderboard
     var rows = document.getElementById('board-rows');
     function fmt(ms) {

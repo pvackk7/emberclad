@@ -6,7 +6,18 @@
 <title>Emberclad</title>
 <meta name="description" content="Emberclad: a dark fantasy adventure.">
 <meta property="og:title" content="Emberclad">
-<meta property="og:image" content="img/video-poster.jpg">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://emberclad.org/">
+<meta property="og:site_name" content="Emberclad">
+<meta property="og:description" content="Emberclad: a dark fantasy adventure.">
+<meta property="og:image" content="https://emberclad.org/img/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A gold coin bearing a crowned princess">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Emberclad">
+<meta name="twitter:description" content="Emberclad: a dark fantasy adventure.">
+<meta name="twitter:image" content="https://emberclad.org/img/og-image.png">
 <meta name="theme-color" content="#07070a">
 <link rel="icon" href="img/favicon.png">
 <link rel="preload" href="img/title.png" as="image">
@@ -210,7 +221,7 @@
       if (location.protocol === 'file:') { startBtn.querySelector('.label').textContent = 'OPEN THE SITE FROM A SERVER TO PLAY'; startBtn.classList.add('nudge'); setTimeout(function () { startBtn.classList.remove('nudge'); }, 600); return; }
       startBtn.hidden = true; loading.hidden = false;
       // Bump BUILD whenever a new game build is copied in, so browsers fetch the new files.
-      var BUILD = '20261123-090505', b = '/play/Build/WebGL_staging', v = '?v=' + BUILD;
+      var BUILD = '20261123-091138', b = '/play/Build/WebGL_staging', v = '?v=' + BUILD;
       var sc = document.createElement('script'); sc.src = b + '.loader.js' + v;
       sc.onload = function () {
         createUnityInstance(canvas, {

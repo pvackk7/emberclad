@@ -20,7 +20,9 @@ public class Game : MonoBehaviour
 
     // Levelling: each one costs a flat step more than the last, so early levels
     // come fast enough to feel like progress and later ones still mean something.
-    public const int XpBase = 250, XpStep = 450;   // L2 at 250 XP, L3 at 950: a flawless run (~990-1100 XP incl. the Warden) ends on level 3, L4 needs 2100
+    // L2 at 250 XP, L3 at 950, L4 at 2100. XP is kept across deaths and runs (saved with the cinders), so the
+    // knight keeps climbing past the old one-run ceiling of level 3.
+    public const int XpBase = 250, XpStep = 450;
     public static int XpForLevel(int level) { return XpBase + XpStep * (level - 1); }
     /// Current level, and XP already earned toward the next one.
     void LevelFromXp(out int level, out int intoLevel)
@@ -31,14 +33,43 @@ public class Game : MonoBehaviour
     public int Level { get { LevelFromXp(out int lv, out _); return lv; } }
     /// 0..1 across the current level, for the bar on the knight's card.
     public float LevelProgress { get { LevelFromXp(out int lv, out int left); return Mathf.Clamp01((float)left / XpForLevel(lv)); } }
+    /// Each level past the first: +10% damage dealt (up to double) and 6% less damage taken (down to half).
+    public static float DamageDealtScaleFor(int level) { return Mathf.Min(2f, 1f + .10f * (level - 1)); }
+    public static float DamageTakenScaleFor(int level) { return Mathf.Max(.5f, 1f - .06f * (level - 1)); }
+    public float DamageDealtScale => DamageDealtScaleFor(Level);
+    public float DamageTakenScale => DamageTakenScaleFor(Level);
+    // Last known XP for this play session. A scene reload (death restart, return to menu) restores from here
+    // as well as PlayerPrefs, so progress survives even where browser storage is blocked (private windows).
+    static int sessionExperience = -1;
+    // A new key on purpose: builds where XP reset every run still wrote it under "Emberclad.Experience", and
+    // test sessions left huge values there. Persistent progression starts clean from this build.
+    const string XpKey = "Emberclad.XP";
+
+    /// A new nickname is a new knight: level 1 again. Progress belongs to the name.
+    public static void ResetKnightProgress()
+    {
+        sessionExperience = 0; PlayerPrefs.SetInt(XpKey, 0); PlayerPrefs.Save();
+        if (I != null) { I.Experience = 0; I.rewardsDirty = false; }
+    }
+
+    /// Resuming a knight: take the site's saved XP if it is further along than this browser's.
+    public static void RestoreKnightXp(int xp)
+    {
+        if (xp <= sessionExperience && (I == null || xp <= I.Experience)) return;
+        sessionExperience = Mathf.Max(sessionExperience, xp); PlayerPrefs.SetInt(XpKey, sessionExperience); PlayerPrefs.Save();
+        if (I != null) I.Experience = Mathf.Max(I.Experience, xp);
+    }
     bool rewardsDirty;
     float rewardSaveTimer;
 
+    void MarkRewardsDirty() { if (!rewardsDirty) rewardSaveTimer = 2f; rewardsDirty = true; }
+
     void SaveRewards()
     {
+        sessionExperience = Mathf.Max(sessionExperience, Experience);
         if (!rewardsDirty) return;
         PlayerPrefs.SetInt("Emberclad.Cinders", Cinders);
-        PlayerPrefs.SetInt("Emberclad.Experience", Experience);
+        PlayerPrefs.SetInt(XpKey, Experience);
         PlayerPrefs.SetInt("Emberclad.Shield", HasShield ? 1 : 0);
         PlayerPrefs.SetInt("Emberclad.Embers", HasEmbers ? 1 : 0);
         PlayerPrefs.SetInt("Emberclad.Slam", HasSlam ? 1 : 0);
@@ -46,8 +77,8 @@ public class Game : MonoBehaviour
         rewardsDirty = false;
     }
 
-    void OnApplicationPause(bool paused) { if (paused) SaveRewards(); }
-    void OnApplicationQuit() { SaveRewards(); }
+    void OnApplicationPause(bool paused) { if (paused) { SaveRewards(); RunRecord.Sync(); } }
+    void OnApplicationQuit() { SaveRewards(); RunRecord.Sync(); }
     void OnDestroy() { SaveRewards(); }
     public static int checkpoint; public static bool skipTitle; public static float runTime; public static int falls, runKills, runBestCombo;
 
@@ -79,24 +110,37 @@ public class Game : MonoBehaviour
     /// discoverable by flailing, so the round after the ember waits until they have
     /// actually held the key, picked the ember out of it, and put the blade back.
     public enum Lesson { None, EquipEmber, BackToBlade }
-    Lesson lesson;
+    Lesson lesson; float lessonT;
     public bool LessonActive { get { return lesson != Lesson.None; } }
+    // Each step of the wheel lesson gives up after this long, so a player who never touches the wheel
+    // is not left with a card on screen and a round that will not continue.
+    const float EquipEmberTimeout = 30f, BackToBladeTimeout = 20f;
 
     void TickLesson()
     {
         if (lesson == Lesson.None || hud == null) return;
+        lessonT += Time.deltaTime;
         if (lesson == Lesson.EquipEmber && QuickItems.Selected == 2)
         {
-            lesson = Lesson.BackToBlade;
+            lesson = Lesson.BackToBlade; lessonT = 0f;
             Sfx.Play("mana", .5f, 0, 1.4f);
-            hud.TeachCard("Ember In Hand", null, new[] { "G" }, new[] { "Hold, aim up for the blade" }, 60f);
+            hud.TeachCard("Ember In Hand", null, new[] { "G" }, new[] { "Hold, aim up for the blade" }, BackToBladeTimeout);
         }
         else if (lesson == Lesson.BackToBlade && QuickItems.Selected == 0)
         {
-            lesson = Lesson.None;
-            hud.DemoHotbar(false);
+            EndLesson();
             Sfx.Play("mana", .55f, 0, 1.55f);
         }
+        else if (lessonT >= (lesson == Lesson.EquipEmber ? EquipEmberTimeout : BackToBladeTimeout)) EndLesson();
+    }
+
+    /// Done (or timed out): the card goes as soon as its condition is met rather than sitting out its timer.
+    void EndLesson()
+    {
+        lesson = Lesson.None; lessonT = 0f;
+        if (hud == null) return;
+        hud.DemoHotbar(false);
+        hud.DismissTeach();
     }
     readonly List<Enemy> alive = new List<Enemy>(); Enemy boss;
     public bool CanUseItems => state == State.Playing && !paused && player != null && !player.dead && hud != null && !hud.IntroOpen;
@@ -104,12 +148,15 @@ public class Game : MonoBehaviour
     public int EncounterIndex => encIdx;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-    static void ResetStatics() { autopilot = false; debugSpeed = 1f; checkpoint = 0; skipTitle = false; runTime = 0; falls = 0; runKills = 0; runBestCombo = 0; }
+    static void ResetStatics() { autopilot = false; debugSpeed = 1f; checkpoint = 0; skipTitle = false; runTime = 0; falls = 0; runKills = 0; runBestCombo = 0; sessionExperience = -1; }
 
     void Awake()
     {
         Cinders = PlayerPrefs.GetInt("Emberclad.Cinders", 0);
-        Experience = 0;   // XP is per run: every scene load (new run or a death restart) starts at level 1
+        // XP and level persist: a death restart sends the knight back to the start of the trail, but he keeps
+        // everything he has earned. Take whichever is higher of the saved value and this session's.
+        Experience = Mathf.Max(0, Mathf.Max(PlayerPrefs.GetInt(XpKey, 0), sessionExperience));
+        sessionExperience = Experience;
         HasShield = PlayerPrefs.GetInt("Emberclad.Shield", 0) == 1;
         HasEmbers = PlayerPrefs.GetInt("Emberclad.Embers", 0) == 1;
         HasSlam = PlayerPrefs.GetInt("Emberclad.Slam", 0) == 1;
@@ -144,6 +191,7 @@ public class Game : MonoBehaviour
     void Update()
     {
         if (rewardsDirty && (rewardSaveTimer -= Time.unscaledDeltaTime) <= 0) SaveRewards();
+        RunRecord.Tick((state == State.Playing && !paused) || state == State.Dead);
         if (autopilot) Autopilot();
         GameInput.Tick();
         QuickItems.Tick(this);
@@ -176,6 +224,7 @@ public class Game : MonoBehaviour
 
     void Reload(bool skip)
     {
+        SaveRewards();
         skipTitle = skip; Time.timeScale = 1;
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
@@ -240,10 +289,10 @@ public class Game : MonoBehaviour
     IEnumerator TeachBlade()
     {
         if (PlayerPrefs.GetInt("Emberclad.TaughtBlade", 0) != 0) yield break;
-        PlayerPrefs.SetInt("Emberclad.TaughtBlade", 1); PlayerPrefs.Save();
         yield return new WaitForSeconds(1.7f);
-        if (hud == null) yield break;
+        if (hud == null || state != State.Playing) yield break;   // died first: teach it on the next attempt instead
         hud.TeachCard("The Blade", null, new[] { "J", "K" }, new[] { "Light attack", "Heavy attack" });
+        PlayerPrefs.SetInt("Emberclad.TaughtBlade", 1); PlayerPrefs.Save();
     }
 
     /// The fourth round is the only one whose lesson is a technique rather than a
@@ -254,7 +303,7 @@ public class Game : MonoBehaviour
         HasSlam = true;
         if (!rewardsDirty) rewardSaveTimer = 2f;
         rewardsDirty = true;
-        if (hud == null) yield break;
+        if (hud == null || state != State.Playing) yield break;
         hud.TeachCard("Ground Slam", null, new[] { "SPACE", "K" }, new[] { "Jump", "Heavy in the air" }, 6f);
     }
 
@@ -342,8 +391,9 @@ public class Game : MonoBehaviour
         int before = Level;
         Cinders += cinders;
         Experience += xp;
-        if (!rewardsDirty) rewardSaveTimer = 2f;
-        rewardsDirty = true;
+        sessionExperience = Mathf.Max(sessionExperience, Experience);
+        MarkRewardsDirty();
+        if (Level > before) { SaveRewards(); RunRecord.Sync(); }   // a new level is saved (and sent) straight away
         if (hud != null)
         {
             // Spray scales with what the thing was worth: a runt is a handful of
@@ -392,9 +442,9 @@ public class Game : MonoBehaviour
             HasEmbers = true;
             if (hud != null)
             {
-                lesson = Lesson.EquipEmber;
+                lesson = Lesson.EquipEmber; lessonT = 0f;
                 hud.DemoHotbar(true);
-                hud.TeachCard("Ember Burst", null, new[] { "G", "L" }, new[] { "Hold, aim down", "Cast" }, 60f);
+                hud.TeachCard("Ember Burst", null, new[] { "G", "L" }, new[] { "Hold, aim down", "Cast" }, EquipEmberTimeout);
             }
         }
     }
@@ -451,7 +501,10 @@ public class Game : MonoBehaviour
 
     public void OnPlayerDead()
     {
+        MarkRewardsDirty(); SaveRewards();   // nothing earned before the fatal blow is lost to the restart
+        lesson = Lesson.None; lessonT = 0f;
         state = State.Dead; stateT = 0; falls++; Sfx.drumsTarget = 0; Sfx.Play("defeat", 0.7f, 0);
+        RunRecord.Sync();
         hud.ShowDeath();
     }
 

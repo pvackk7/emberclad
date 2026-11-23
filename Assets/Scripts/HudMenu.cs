@@ -108,7 +108,8 @@ public partial class Hud
         Button first = null;
         if (next == 0)
         {
-            first = MenuButton(pauseMenu ? "Resume" : "Play", 30, () => { if (pauseMenu) ClosePause(); else OpenNicknamePage(); });
+            // A knight mid-run owns this browser's Play button until the Warden falls.
+            first = MenuButton(pauseMenu ? "Resume" : RunRecord.HasSavedRun ? "Continue" : "Play", 30, () => { if (pauseMenu) ClosePause(); else PlayOrContinue(); });
             MenuButton("Options", -75, () => MenuPage(1));
             MenuButton(pauseMenu ? "Return to Menus" : "Exit", -180, () => { if (pauseMenu) game.ReturnToMenu(); else ExitGame(); });
         }

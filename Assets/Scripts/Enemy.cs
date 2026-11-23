@@ -322,6 +322,8 @@ public class Enemy : Actor
         // TEMPORARY: one swing kills. Also walks straight through a raised shield,
         // otherwise the shield-bearers would still soak a light hit.
         bool oneShot = Cheats.On && h.from is Player;
+        // The knight's level sharpens everything he lands (sword, slam, embers).
+        if (h.from is Player && Game.I != null) h.dmg = Mathf.Max(1, Mathf.RoundToInt(h.dmg * Game.I.DamageDealtScale));
         if (oneShot) h.dmg = hp;
         bool frontal = h.from != null && (h.from.pos.x - pos.x) * facing > 0;
         bool guardBreak = hasShield && st == St.Guard && frontal && h.heavy;

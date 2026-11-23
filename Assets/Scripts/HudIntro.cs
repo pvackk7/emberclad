@@ -9,6 +9,8 @@ public partial class Hud
     Text introHeading, introNextLabel;
     Button introNext;
     float introOpenedAt;
+    // The panel pauses the game, so it must never be able to stay up forever.
+    const float MaxIntroSeconds = 25f;
     public bool IntroOpen { get; private set; }
 
     void BuildIntro()
@@ -64,7 +66,7 @@ public partial class Hud
         // cannot say.
         introNextLabel.text = "Begin";
         MenuFocusButton.KeyboardFocus = false;
-        EventSystem.current.SetSelectedGameObject(null);
+        if (EventSystem.current != null) EventSystem.current.SetSelectedGameObject(null);
     }
 
     void CloseIntro()
@@ -72,23 +74,26 @@ public partial class Hud
         if (!IntroOpen) return;
         IntroOpen = false; introPanel.gameObject.SetActive(false);
         PlayerPrefs.SetInt("Emberclad.IntroSeen", 1); PlayerPrefs.Save();
-        EventSystem.current.SetSelectedGameObject(null); game.MenuPause(false);
+        if (EventSystem.current != null) EventSystem.current.SetSelectedGameObject(null);
+        game.MenuPause(false);
     }
 
     void TickIntro()
     {
-        if (!IntroOpen || Time.unscaledTime < introOpenedAt + .25f) return;
+        if (!IntroOpen) return;
+        if (game == null || game.state != Game.State.Playing || Time.unscaledTime - introOpenedAt >= MaxIntroSeconds) { CloseIntro(); return; }
+        if (Time.unscaledTime < introOpenedAt + .25f) return;
         var keyboard = Keyboard.current;
         if (keyboard == null) return;
         if (keyboard.escapeKey.wasPressedThisFrame) { CloseIntro(); return; }
-        if ((keyboard.enterKey.wasPressedThisFrame || keyboard.spaceKey.wasPressedThisFrame) && EventSystem.current.currentSelectedGameObject == null) { CloseIntro(); return; }
+        if ((keyboard.enterKey.wasPressedThisFrame || keyboard.spaceKey.wasPressedThisFrame) && (EventSystem.current == null || EventSystem.current.currentSelectedGameObject == null)) { CloseIntro(); return; }
         // Anywhere at all. The quarter-second guard above keeps the click that started
         // the run from dismissing the panel on the frame it opens.
         if (Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame) { CloseIntro(); return; }
         if (keyboard.tabKey.wasPressedThisFrame || keyboard.rightArrowKey.wasPressedThisFrame || keyboard.leftArrowKey.wasPressedThisFrame)
         {
             MenuFocusButton.KeyboardFocus = true;
-            if (EventSystem.current.currentSelectedGameObject == null) EventSystem.current.SetSelectedGameObject(introNext.gameObject);
+            if (EventSystem.current != null && EventSystem.current.currentSelectedGameObject == null) EventSystem.current.SetSelectedGameObject(introNext.gameObject);
         }
     }
 }

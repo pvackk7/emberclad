@@ -148,9 +148,13 @@ public sealed class ForestScenery : MonoBehaviour
     {
         const int slices = 64;
         var v = new Vector3[rings.Length*slices+1]; var uv = new Vector2[v.Length]; var c = new Color[v.Length];
-        var tri = new List<int>(); var texture = moonPaint.mainTexture;
-        Vector2 texel = new Vector2(1f/texture.width,1f/texture.height);
-        Vector2 lunarCenter = new Vector2(1303f/1672f,702f/941f);
+        var tri = new List<int>();
+        // The moon is cut out of the 1672 x 941 painting by pixel position. Use the painting's own size,
+        // not the imported texture's: the web build caps textures (this one came in at 1024 x 576), and
+        // 1/texture.width then cut out a region 1.6x too big -- the stretched, blocky moon on the website.
+        const float PaintingW = 1672f, PaintingH = 941f;
+        Vector2 texel = new Vector2(1f/PaintingW,1f/PaintingH);
+        Vector2 lunarCenter = new Vector2(1303f/PaintingW,702f/PaintingH);
         v[0] = center; uv[0] = lunarCenter; c[0] = lunar ? Color.white : Ink(79,157,185,alpha[0]);
         for (int j = 0; j < rings.Length; j++)
         for (int i = 0; i < slices; i++)

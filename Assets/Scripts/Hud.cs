@@ -200,7 +200,7 @@ public partial class Hud : MonoBehaviour
     public void ShowTitle()
     {
         titleOn = true; titlePanel.gameObject.SetActive(true); titleCg.alpha = 1;
-        if (Application.platform == RuntimePlatform.WebGLPlayer && !webNickShown) { webNickShown = true; OpenNicknamePage(); }
+        if (Application.platform == RuntimePlatform.WebGLPlayer && !webNickShown) { webNickShown = true; PlayOrContinue(); }
     }
     public void HideTitle(bool instant) { titleOn = false; if (instant) titleCg.alpha = 0; }
     // A lesson left on screen sits right where the pause card's footer goes, so it
@@ -222,7 +222,7 @@ public partial class Hud : MonoBehaviour
     public void Banner(string s, float dur) { bannerText.text = s; bannerT = dur; bannerDur = dur; }
     public void ShowBoss(Enemy b) { boss = b; bossShown = 1; bossPanel.gameObject.SetActive(true); }
     public void HideBoss() { boss = null; bossPanel.gameObject.SetActive(false); }
-    public void ShowDeath() { deathOn = true; }
+    public void ShowDeath() { deathOn = true; ClearTeach(); DemoHotbar(false); }
     bool deathOn, victoryOn;
 
     Text victoryResult, victorySaved, cardName;

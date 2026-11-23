@@ -18,6 +18,14 @@ public partial class Hud
     // One width for every lesson, so cards do not change shape between rounds, and
     // one margin that the heading, the rows and the body all line up against.
     const float CardW = 520f, CardPad = 30f;
+    const float MaxTeachSeconds = 30f;
+
+    /// The lesson's condition was met: let the card leave now (its usual lift-and-fade) instead of
+    /// sitting out the rest of its timer.
+    public void DismissTeach() { if (teachCard != null) teachT = Mathf.Min(teachT, .4f); }
+
+    /// Death, victory or a scene change: the card goes at once.
+    public void ClearTeach() { if (teachCard != null) { Destroy(teachCard.gameObject); teachCard = null; } }
 
     /// keys/labels are parallel: each pair becomes one row of key caps and a caption.
     /// Key names are the defaults KeyRow understands, so they re-map to whatever the
@@ -25,7 +33,10 @@ public partial class Hud
     public void TeachCard(string title, string body, string[] keys, string[] captions, float dur = 7f)
     {
         if (root == null) return;
+        if (game != null && game.state != Game.State.Playing) return;   // never over the death or victory screen
         if (teachCard != null) Destroy(teachCard.gameObject);
+        // Hard ceiling on any card's life, whatever the caller asked for.
+        dur = Mathf.Clamp(dur, 1f, MaxTeachSeconds);
 
         int rows = keys == null ? 0 : keys.Length;
         Vector2 BC = new Vector2(.5f, 0), TL = new Vector2(0, 1), TC = new Vector2(.5f, 1);
@@ -64,6 +75,7 @@ public partial class Hud
     void TickTeach(float dt)
     {
         if (teachCard == null) return;
+        if (game != null && game.state != Game.State.Playing) { ClearTeach(); return; }
         teachT -= dt;
         float age = teachDur - teachT;
 

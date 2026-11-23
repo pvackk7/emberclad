@@ -3,8 +3,9 @@ using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 
-/// The nickname page shown when Play is pressed (instead of an account). The name is only
-/// used to label this run on the leaderboard; anyone can play again under another name.
+/// The nickname page shown when Play is pressed (instead of an account). A name is a knight:
+/// once entered it is this browser's run until the Bone Warden falls, so while a knight is
+/// mid-run Play skips this page and continues it (see RunRecord).
 /// Typing is read straight off Keyboard.current, like the old account page, because the
 /// project uses the new Input System only.
 public partial class Hud
@@ -16,10 +17,27 @@ public partial class Hud
     float nickCaretT;
     Keyboard nickKeyboard;
 
+    /// Play: continue the knight that is mid-run, or ask for a new name.
+    void PlayOrContinue()
+    {
+        if (!RunRecord.HasSavedRun) { OpenNicknamePage(); return; }
+        if (nickBusy) return;
+        nickBusy = true;
+        foreach (Transform child in menuContent) { child.gameObject.SetActive(false); Destroy(child.gameObject); }
+        Txt("Riding as " + RunRecord.SavedNickname + "…", menuContent, center, new Vector2(0, -250), new Vector2(1000, 70), 38, Gold);
+        StartCoroutine(RunRecord.Resume(message =>
+        {
+            nickBusy = false;
+            if (!RunRecord.HasSavedRun) { OpenNicknamePage(); return; }   // it was finished elsewhere
+            unrankedNote = message;
+            BeginLoading();
+        }));
+    }
+
     void OpenNicknamePage()
     {
         nickOpen = true; nickCaretT = 0;
-        nickValue = RunRecord.LastNickname;
+        nickValue = "";   // a finished name is spent, so start empty
         foreach (Transform child in menuContent) { child.gameObject.SetActive(false); Destroy(child.gameObject); }
         titleCg.blocksRaycasts = true; titleCg.interactable = true;
         menuShade.color = new Color(0.02f, 0.03f, 0.04f, 0.45f);

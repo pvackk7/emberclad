@@ -646,7 +646,9 @@ public class Player : Actor
             return false;
         }
         spinCur = 0; dodgeDir = Vector2.zero; vel = Vector2.zero; buf = ""; dodgeCd = .3f;
-        int dmg = shieldSprite != null ? Mathf.Max(1, Mathf.RoundToInt(h.dmg * (1f - ShieldSoak))) : h.dmg;
+        // Higher levels blunt every blow that lands (applied before the shield's own soak).
+        int dmg = Mathf.Max(1, Mathf.RoundToInt(h.dmg * (Game.I != null ? Game.I.DamageTakenScale : 1f)));
+        if (shieldSprite != null) dmg = Mathf.Max(1, Mathf.RoundToInt(dmg * (1f - ShieldSoak)));
         if (Cheats.On) dmg = 0;
         hp -= dmg; Flash(new Color(1, 0.3f, 0.25f), 0.25f);
         if (shieldSprite != null) Fx.Ring(Center, .9f, new Color(.85f, .9f, 1f, .55f), .22f);

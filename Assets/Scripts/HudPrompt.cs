@@ -38,7 +38,8 @@ public partial class Hud
     {
         if (promptRT == null) return;
         // One frame of slack: the pickup's Update and this one are not ordered.
-        bool on = Time.frameCount - promptFrame <= 1;
+        // Never over the death/victory screens, the first-steps panel or the pause menu.
+        bool on = game != null && game.state == Game.State.Playing && !IntroOpen && !PauseMenuOpen && Time.frameCount - promptFrame <= 1;
         promptFade = Mathf.MoveTowards(promptFade, on ? 1f : 0f, dt * 8f);
         promptCg.alpha = promptFade;
         if (promptFade <= 0f) return;

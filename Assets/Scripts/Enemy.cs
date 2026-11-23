@@ -3,7 +3,7 @@ using UnityEngine;
 /// Forest skeleton: walks at the player, telegraphs, lunges with its dagger. Variants differ by stats only.
 public class Enemy : Actor
 {
-    public enum Kind { Grunt, Runt, Brute, Boss }
+    public enum Kind { Grunt, Runt, Brute, Boss, Dragon }
     public enum St { Spawn, Chase, Windup, Strike, Recover, Hurt, Air, Down, Stagger, LeapPrep, Leap, Summon, Guard, Evade }
     [System.NonSerialized] public bool rewardGranted;
     public Kind kind; public St st = St.Spawn;
@@ -25,8 +25,28 @@ public class Enemy : Actor
     Vector2 evadeDirection;
     bool strikeFx;
     public bool IsBoss => kind == Kind.Boss;
+    /// The dragon cannot be hit at all: he is in the air, well out of reach, and the
+    /// round he appears in is about moving out of his line rather than trading blows.
+    public bool Invulnerable => kind == Kind.Dragon;
+    BabyDragon dragon;
 
-    public static Enemy Create(Kind kind, Vector2 at)
+    // Perch state. Kept apart from the walking skeletons' state machine entirely,
+    // because none of chase / windup / strike means anything to something that never
+    // comes down.
+    float perchT, shotCd, fleeT = -1f, breathT, homeY;
+
+    /// His escort is dead. He loses his nerve, scrabbles backwards and is gone.
+    public void Flee()
+    {
+        if (fleeT >= 0f) return;
+        fleeT = 0f;
+        Sfx.Play("tele", .55f, 0, 1.6f);
+        Fx.Emit("fx_puff", Center, new Vector2(0, 1.5f), .5f, .5f, 1f, new Color(.82f, .82f, .88f, .8f), new Color(.82f, .82f, .88f, 0));
+    }
+
+    /// shield: null leaves it to chance as before, true or false pins it. The fixed
+    /// rosters pin it, so "two shield skeletons" means two, every time.
+    public static Enemy Create(Kind kind, Vector2 at, bool? shield = null)
     {
         var go = new GameObject("Skeleton_" + kind); var e = go.AddComponent<Enemy>();
         e.kind = kind; e.pos = at;
@@ -35,11 +55,13 @@ public class Enemy : Actor
             case Kind.Runt: e.Stats(42, 3.7f, 9, 0.78f, 0.30f, 1.15f, 0.28f); break;
             case Kind.Brute: e.Stats(115, 2.3f, 18, 1.42f, 0.50f, 1.7f, 0.5f); break;
             case Kind.Boss: e.Stats(540, 2.1f, 18, 2.15f, 0.8f, 2.3f, 0.8f); break;
+            case Kind.Dragon: e.Stats(9999, 0f, 11, 1.0f, 0f, 0f, 0.34f); break;
             default: e.Stats(64, 2.9f, 12, 1.0f, 0.36f, 1.35f, 0.34f); break;
         }
         e.BaseSetup(e.scale * 1.05f);
-        e.rig = Rig.Skeleton(e.visual, kind == Kind.Brute, kind == Kind.Boss, kind == Kind.Brute || kind == Kind.Boss);
-        e.hasShield = kind != Kind.Boss && Random.value < .25f;
+        if (kind == Kind.Dragon) e.dragon = BabyDragon.Attach(e.visual);
+        else e.rig = Rig.Skeleton(e.visual, kind == Kind.Brute, kind == Kind.Boss, kind != Kind.Grunt && kind != Kind.Runt);
+        e.hasShield = kind != Kind.Boss && kind != Kind.Dragon && (shield ?? Random.value < .25f);
         if (e.hasShield)
         {
             e.shield = Rig.Part(e.rig.body, "s_shield", new Vector2(.32f, .30f), 10);
@@ -55,18 +77,23 @@ public class Enemy : Actor
         return e;
     }
 
+    // Every enemy's walk scaled together (user, 2026-11-23): x4.9/2.9 so a regular skeleton walks exactly with the knight.
+    public const float SpeedScale = 4.9f / 2.9f;
     void Stats(int hp_, float speed_, int dmg_, float scale_, float windup_, float range_, float radius_)
     {
-        hp = maxHp = hp_; speed = speed_ * Random.Range(0.9f, 1.1f); dmg = dmg_; scale = scale_; windup = windup_; range = range_; radius = radius_;
+        hp = maxHp = hp_; speed = speed_ * SpeedScale * Random.Range(0.9f, 1.1f); dmg = dmg_; scale = scale_; windup = windup_; range = range_; radius = radius_;
     }
 
     protected override void OnDisable() { base.OnDisable(); ReleaseToken(); }
     void ReleaseToken() { if (hasToken) { hasToken = false; tokens = Mathf.Max(0, tokens - 1); } }
-    void Go(St s) { st = s; t = 0; }
+    // Any state other than tumbling (Air) or lying (Down) stands the skeleton back up, so a
+    // tumble interrupted by a hit or a non-Air landing can never leave it walking sideways.
+    void Go(St s) { st = s; t = 0; if (s != St.Air && s != St.Down) spinCur = 0; }
 
     void Update()
     {
         float dt = Time.deltaTime; if (dt <= 0) return;
+        if (kind == Kind.Dragon) { TickDragon(dt); return; }
         t += dt; if (cd > 0) cd -= dt; defenseCd -= dt; decisionTime -= dt;
         var p = Game.I.player; float extraY = 1f;
         rig.rate = 24f;
@@ -224,12 +251,81 @@ public class Enemy : Actor
         kb = new Vector2(dir * 2.5f, 0); Flash(Color.white, 0.14f); Sfx.Play("bone_break", .5f);
     }
 
+    /// Sits still, lobs a coal every couple of seconds, and never touches the ground.
+    /// Physics is deliberately not run here: gravity would pull him out of the tree.
+    void TickDragon(float dt)
+    {
+        var p = Game.I.player;
+        perchT += dt;
+        if (p != null) facing = p.pos.x >= pos.x ? 1 : -1;
+        if (dragon != null) dragon.Facing = facing;
+
+        if (fleeT >= 0f)
+        {
+            // Beats hard, climbs, and is gone over the treetops.
+            fleeT += dt;
+            pos.x -= facing * 4.2f * dt;
+            z += 2.6f * dt;
+            if (dragon != null) { dragon.Breathing = 0f; dragon.SetAlpha(Mathf.Clamp01(1f - fleeT / .9f)); }
+            if (Random.value < dt * 10f) Fx.Dust(pos + new Vector2(0, z), 1, .4f);
+            if (fleeT > .95f) { dead = true; Destroy(gameObject); return; }
+        }
+        else
+        {
+            // Holds station above the clearing, drifting on a slow figure of eight
+            // around wherever the roster put him.
+            if (homeY == 0f) homeY = pos.y;
+            z = PerchHeight + Mathf.Sin(perchT * 1.3f) * .22f;
+            pos.y = homeY + Mathf.Sin(perchT * .8f) * .12f;
+
+            shotCd -= dt;
+            bool canShoot = p != null && !p.dead && Game.I.state == Game.State.Playing && Mathf.Abs(p.pos.x - pos.x) < 18f;
+
+            // A visible wind-up: he rears back and the mouth lights before anything
+            // comes out, so the shot can be read and walked away from.
+            if (canShoot && shotCd < WindupTime)
+            {
+                breathT = Mathf.Clamp01((WindupTime - shotCd) / WindupTime);
+                if (dragon != null) dragon.Breathing = breathT;
+            }
+            else { breathT = 0f; if (dragon != null) dragon.Breathing = 0f; }
+
+            if (shotCd <= 0f && canShoot)
+            {
+                shotCd = Random.Range(1.9f, 2.8f);
+                Vector2 muzzle = pos + new Vector2(facing * .45f, 0f);
+                float muzzleZ = z + .22f;
+                EmberShot.Spawn(muzzle, muzzleZ, p.pos, this);
+                Fx.Flames(new Vector2(muzzle.x, muzzle.y + muzzleZ), 3, .55f);
+                Sfx.Play("cast", .45f, 0, 1.5f);
+                if (dragon != null) dragon.Breathing = 0f;
+            }
+        }
+        if (dragon != null) dragon.Tick(dt, fleeT >= 0f);
+        ApplyTransform();
+    }
+
+    public const float PerchHeight = 2.15f;
+    const float WindupTime = .55f;
+
     public override bool TakeHit(Hit h)
     {
         if (dead || (st == St.Spawn && t < 0.35f) || st == St.Summon || st == St.Leap) return false;
+        if (Invulnerable)
+        {
+            // Rings off the branch so the swing reads as reaching him and failing,
+            // rather than as the hit box quietly missing.
+            Fx.HitSpark(Center + new Vector2(-h.dir * .3f, 0), .7f, new Color(.72f, .82f, 1f), h.dir);
+            Sfx.Play("hit_heavy", .4f, .03f, 1.6f);
+            return false;
+        }
+        // TEMPORARY: one swing kills. Also walks straight through a raised shield,
+        // otherwise the shield-bearers would still soak a light hit.
+        bool oneShot = Cheats.On && h.from is Player;
+        if (oneShot) h.dmg = hp;
         bool frontal = h.from != null && (h.from.pos.x - pos.x) * facing > 0;
         bool guardBreak = hasShield && st == St.Guard && frontal && h.heavy;
-        if (hasShield && st == St.Guard && frontal && !h.heavy && z < .1f)
+        if (hasShield && st == St.Guard && frontal && !h.heavy && z < .1f && !oneShot)
         {
             Fx.HitSpark(Center + new Vector2(facing * .3f, 0), .65f, new Color(.8f, .9f, 1));
             Sfx.Play("hit_heavy", .45f, .03f, 1.4f);

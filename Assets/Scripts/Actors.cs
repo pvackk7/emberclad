@@ -31,7 +31,7 @@ public class Rig
         r.spin = new GameObject("spin").transform; r.spin.SetParent(visual, false); r.spin.localPosition = r.spinBase;
         r.bodyBase = new Vector3(0, -0.26f, 0);
         r.body = new GameObject("body").transform; r.body.SetParent(r.spin, false); r.body.localPosition = r.bodyBase;
-        r.cape = Part(r.body, "k_cape", new Vector2(-0.14f, 0.53f), 0);
+        // Cape removed at the user's request; cape stays null and the pose code skips it.
         r.armB = Part(r.body, "k_arm", new Vector2(0.20f, 0.50f), 1);
         r.legB = Part(r.spin, "k_leg", new Vector2(0.13f, -0.13f), 2);
         r.legF = Part(r.spin, "k_leg", new Vector2(-0.13f, -0.13f), 3);
@@ -58,12 +58,11 @@ public class Rig
         r.headSr = r.head.GetComponent<SpriteRenderer>(); r.headNormal = r.headSr.sprite;
         r.headHurt = Art.TryS(redEyes ? "s_head_red_hurt" : "s_head_hurt");
         r.jaw = Part(r.head, "s_jaw", new Vector2(-0.03f, 0.03f), 5);
-        // The skull runs -0.073 to 0.447 around the head pivot and the helm's own pivot
-        // sits 13% up its height. 0.46 left it hovering clear of the bone; 0.25 dropped
-        // the brim over the eye sockets and swallowed the face. 0.34 puts the brim about
-        // seven tenths up the skull, which is where a helmet actually sits.
-        if (helm) Part(r.head, "s_helm", new Vector2(0f, 0.34f), 7);
-        if (boss) Part(r.head, "s_antlers", new Vector2(-0.01f, 0.60f), 7);
+        // No helmets on skeletons any more (the helm flag is kept so callers don't change).
+        // The Bone Warden's antler crown: the skull runs -0.073 to 0.447 around the head
+        // pivot and the crown's pivot is at the bottom of its band. At 0.60 the band hung
+        // clear above the bone; 0.28 seats it around the top of the cranium.
+        if (boss) Part(r.head, "s_antlers", new Vector2(-0.02f, 0.28f), 7);
         r.armF = Part(r.body, "s_arm", new Vector2(-0.07f, 0.36f), 9);
         r.weapon = Part(r.armF, "s_dagger", new Vector2(0, -0.40f), 8);
         return r;
@@ -107,7 +106,7 @@ public class Actor : MonoBehaviour
     public float scale = 1f;
     [System.NonSerialized] public Transform visual;
     protected SpriteRenderer shadow; protected SortingGroup group; protected SpriteRenderer[] rends;
-    float flashT, flashDur; Color flashCol; MaterialPropertyBlock mpb;
+    float flashT, flashDur; Color flashCol; protected MaterialPropertyBlock mpb;
     static readonly int FlashId = Shader.PropertyToID("_Flash"), FlashColId = Shader.PropertyToID("_FlashColor");
 
     protected virtual void OnEnable() { All.Add(this); }
@@ -203,12 +202,13 @@ public class Player : Actor
     /// maximum, and never the last of it. A full bar is therefore worth exactly
     /// seven casts, and the eighth is refused rather than fatal.
     public int EmberCost { get { return Mathf.Max(1, Mathf.CeilToInt(maxHp / 8f)); } }
-    public bool HasEmbers { get { return Game.I != null && Game.I.HasEmbers; } }
-    public bool CanCast { get { return !dead && HasEmbers && hp > EmberCost; } }
+    public bool HasEmbers { get { return Cheats.On || (Game.I != null && Game.I.HasEmbers); } }
+    public bool CanCast { get { return !dead && HasEmbers && (Cheats.On || hp > EmberCost); } }
     public int comboHits; public float comboHitsT; public int maxCombo; public int kills;
     public bool usedJump, usedDodge, usedAttack, usedHeavy, usedMagic;
     float t; int combo; bool hitDone, air; float comboReset; string buf = ""; float bufT; int airSwings;
     Vector2 vel, dodgeDir; float dodgeCd;
+    static readonly int VisorEmber = Shader.PropertyToID("_VisorEmber");
     Rig rig; SpriteRenderer drinkBottle, emberOrb, emberOrbCore; float walkPhase, lastStep, spinCur, introT;
     Vector3 bottleBaseScale, orbBaseScale; int lastQuickSelected; float swapT = 999f; bool potionOut, emberOut;
     SpriteRenderer swordSprite, shieldSprite; bool grabDone = true;
@@ -244,6 +244,8 @@ public class Player : Actor
         p.pos = at; p.maxHp = p.hp = 100; p.radius = 0.32f;
         p.scale = 1.3f;
         p.BaseSetup(1.3f); p.rig = Rig.Knight(p.visual);
+        p.rig.headSr = p.rig.head.GetComponent<SpriteRenderer>();
+        p.SetVisorEmber(1f);
         // The flask hangs off the same fist the sword does -- one hand, one item --
         // so a swap reads as the knight genuinely trading one for the other rather
         // than sprouting a second arm's worth of gear.
@@ -401,7 +403,7 @@ public class Player : Actor
 
     void Locomote(Vector2 move, float dt, float mul, bool turn = true)
     {
-        Vector2 target = new Vector2(move.x * 4.9f, move.y * 3.4f) * mul;
+        Vector2 target = new Vector2(move.x * 4.9f, move.y * 4.9f * 0.75f) * mul;   // = skeleton walk (2.9 x Enemy.SpeedScale, y x0.75)
         vel = Vector2.Lerp(vel, target, 1 - Mathf.Exp(-18f * dt));
         pos += vel * dt;
         if (turn && Mathf.Abs(move.x) > 0.1f) facing = move.x > 0 ? 1 : -1;
@@ -530,7 +532,7 @@ public class Player : Actor
         // Tell the bar this health is being spent rather than taken, so the strip
         // ignites and crumbles to ash instead of flinching -- then spend it.
         Game.I.hud.MarkEmberSpend();
-        hp = Mathf.Max(1, hp - EmberCost);
+        if (!Cheats.On) hp = Mathf.Max(1, hp - EmberCost);
         Fx.Flames(Center + new Vector2(facing * 0.4f, 0), 3, 0.5f);
         Sfx.Play("cast", 0.7f);
     }
@@ -543,6 +545,7 @@ public class Player : Actor
         if (!hitDone && t >= 0.16f)
         {
             hitDone = true; kb = new Vector2(-facing * 3f, 0);
+            ForestScenery.IgniteVisibleLanterns();
             EmberWave.Spawn(pos + new Vector2(facing * 0.6f, 0), facing, z);
             CameraRig.I.Shake(0.14f, 0.2f); Sfx.Play("boom", 0.5f, 0.05f, 1.5f);
         }
@@ -644,13 +647,14 @@ public class Player : Actor
         }
         spinCur = 0; dodgeDir = Vector2.zero; vel = Vector2.zero; buf = ""; dodgeCd = .3f;
         int dmg = shieldSprite != null ? Mathf.Max(1, Mathf.RoundToInt(h.dmg * (1f - ShieldSoak))) : h.dmg;
+        if (Cheats.On) dmg = 0;
         hp -= dmg; Flash(new Color(1, 0.3f, 0.25f), 0.25f);
         if (shieldSprite != null) Fx.Ring(Center, .9f, new Color(.85f, .9f, 1f, .55f), .22f);
         kb = new Vector2(h.dir * h.knock, 0); if (h.launch > 0) { vz = h.launch; z = Mathf.Max(z, 0.01f); }
         CameraRig.I.Shake(0.25f, 0.25f); Game.I.HitStop(0.08f); Sfx.Play("hurt", 0.7f);
         Fx.HitSpark(Center, 0.75f, new Color(1, 0.55f, 0.42f), h.dir);
         comboHits = 0; combo = 0;
-        if (hp <= 0) { hp = 0; dead = true; st = St.Dead; t = 0; vz = 6; z = 0.01f; kb = new Vector2(h.dir * 5f, 0); Game.I.OnPlayerDead(); }
+        if (hp <= 0) { hp = 0; dead = true; SetVisorEmber(0f); st = St.Dead; t = 0; vz = 6; z = 0.01f; kb = new Vector2(h.dir * 5f, 0); Game.I.OnPlayerDead(); }
         else { st = St.Hurt; t = 0; invuln = 0.55f; }
         return true;
     }
@@ -668,6 +672,13 @@ public class Player : Actor
         if (emberOrb == null || !emberOrb.enabled) return;
         float tt = Time.time;
         emberOrb.transform.localRotation = Quaternion.Inverse(rig.armF.localRotation);
+        // Facing left the shield arm is the near one and the ember fist is the far
+        // one, so the coal has to tuck behind the shield like the sword does instead
+        // of floating over it. Both glows are additive, so their order between
+        // themselves doesn't matter -- only that they sit under the shield.
+        bool farHand = facing < 0 && shieldSprite != null && st != St.Cast;
+        emberOrb.sortingOrder = farHand ? ShieldFrontOrder - 1 : OrbOrder;
+        emberOrbCore.sortingOrder = farHand ? ShieldFrontOrder - 1 : OrbOrder + 1;
         float wob = 1f + Mathf.Sin(tt * 7.3f) * .07f + Mathf.Sin(tt * 11.9f) * .04f;
         emberOrb.transform.localScale = orbBaseScale * wob * (st == St.Cast ? 1.35f : 1f);
         emberOrb.color = new Color(1f, .40f + .11f * Mathf.Sin(tt * 9.1f), .09f, .70f);
@@ -675,6 +686,13 @@ public class Player : Actor
         // Fx.Flames throws its own wide glow, so keep both the rate and the size low or
         // the knight ends up standing in a floodlight.
         if (Random.value < dt * 5.5f) Fx.Flames(World.Unproject(emberOrb.transform.position), 1, .21f);
+    }
+
+    void SetVisorEmber(float intensity)
+    {
+        rig.headSr.GetPropertyBlock(mpb);
+        mpb.SetFloat(VisorEmber, intensity);
+        rig.headSr.SetPropertyBlock(mpb);
     }
 
     void PoseFlask()
@@ -865,8 +883,8 @@ public class EmberWave : MonoBehaviour
     // tolerance reached better than nine tenths of it -- fired from anywhere it swept
     // every enemy on screen regardless of where they stood. 0.42 plus half a body is
     // about one body of slack: enough to forgive a near miss, not enough to aim with
-    // your eyes shut. HeightSlack keeps it off anything launched well overhead.
-    const float Reach = 0.8f, LaneDepth = 0.42f, HeightSlack = 1.6f;
+    // your eyes shut. BallRadius/BodyHeight make it hit only what it visibly passes through.
+    const float Reach = 0.8f, LaneDepth = 0.42f, BallRadius = 0.35f, BodyHeight = 1.45f;
 
     public static void Spawn(Vector2 at, int dir, float height)
     {
@@ -892,13 +910,17 @@ public class EmberWave : MonoBehaviour
             var e = Actor.All[i] as Enemy; if (e == null || e.dead || hit.Contains(e)) continue;
             if (Mathf.Abs(e.pos.x - pos.x) > Reach + e.radius) continue;
             if (Mathf.Abs(e.pos.y - pos.y) > LaneDepth + e.radius * 0.5f) continue;
-            if (Mathf.Abs(e.z - h) > HeightSlack) continue;
+            // The ball has to actually pass through the body. It flies at 0.7 + h (h is
+            // the knight's height when he cast it), so one thrown from a jump sails over a
+            // grounded skeleton's skull instead of hitting it through the air.
+            float ballMid = .7f + h, bodyTop = e.z + BodyHeight * e.scale;
+            if (ballMid - BallRadius > bodyTop || ballMid + BallRadius < e.z) continue;
             hit.Add(e);
             var hh = new Hit { dmg = 20, knock = 6f, launch = 5f, stun = 0.7f, dir = dir, heavy = true, from = Game.I.player };
             if (e.TakeHit(hh)) { Game.I.player.OnLanded(e); Fx.Flames(e.Center, 5, 0.9f); Game.I.HitStop(0.03f); }
         }
         float a = Mathf.Clamp01((0.75f - life) / 0.15f);
         sr.color = new Color(1, 1, 1, a);
-        if (life > 0.75f || World.OutOfView(pos.x, 2f)) { Fx.Flames(pos + new Vector2(0, 0.6f), 4, 0.8f); Destroy(gameObject); }
+        if (life > 0.75f || World.OutOfView(pos.x, 2f)) { Fx.Flames(pos + new Vector2(0, 0.6f + h), 4, 0.8f); Destroy(gameObject); }
     }
 }

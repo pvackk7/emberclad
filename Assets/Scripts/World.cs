@@ -3,9 +3,15 @@ using UnityEngine;
 /// Level geometry: lane bounds, obstacle circles and the procedural dressing of the forest.
 public static class World
 {
-    public const float MinY = -3.85f, MaxY = -1.3f, Tile = 20.48f;
+    public const float MinY = -3.85f, MaxY = -.8f, Tile = 20.48f;
     public static float MinX = -2.5f, MaxX = 139.5f, lockMin = -999, lockMax = 999;
     public const float CampX = 136.5f;
+
+    static readonly System.Collections.Generic.List<Vector3> trunks = new System.Collections.Generic.List<Vector3>();
+    public static void AddTrunk(float x, float y, float radius)
+    {
+        trunks.Add(new Vector3(x, y, radius));
+    }
 
     public static Transform shrine;
 
@@ -17,24 +23,28 @@ public static class World
     public static Vector2 Project(Vector2 p) { return new Vector2(p.x, p.y + Height(p.x)); }
     public static Vector2 Unproject(Vector2 p) { return new Vector2(p.x, p.y - Height(p.x)); }
 
-    public static void ClampLane(ref Vector2 p) { p.y = Mathf.Clamp(p.y, MinY, MaxY); p.x = Mathf.Clamp(p.x, MinX - 3, MaxX + 3); }
+    // The back of the lane follows the painted path itself: the line where the
+    // brown soil meets the grass verge in the floor art (ForestScenery.TrailEdge),
+    // so feet stay on the path instead of climbing the verge or the pine bank.
+    public static float BackEdge(float x) { return ForestScenery.TrailEdge(x); }
+
+    public static void ClampLane(ref Vector2 p) { p.y = Mathf.Clamp(p.y, MinY, BackEdge(p.x)); p.x = Mathf.Clamp(p.x, MinX - 3, MaxX + 3); }
 
     public static void Constrain(Actor a)
     {
         bool player = a is Player;
-        a.pos.y = Mathf.Clamp(a.pos.y, MinY, MaxY);
+        foreach (var trunk in trunks)
+        {
+            float reach = trunk.z + a.radius;
+            Vector2 delta = a.pos - new Vector2(trunk.x, trunk.y);
+            delta.y *= 2;
+            if (delta.sqrMagnitude >= reach * reach) continue;
+            Vector2 edge = delta.sqrMagnitude < .000001f ? Vector2.down : delta.normalized;
+            a.pos = new Vector2(trunk.x + edge.x * reach, trunk.y + edge.y * reach * .5f);
+        }
+        a.pos.y = Mathf.Clamp(a.pos.y, MinY, BackEdge(a.pos.x));
         if (player) a.pos.x = Mathf.Clamp(a.pos.x, Mathf.Max(MinX, lockMin), Mathf.Min(MaxX, lockMax));
         else a.pos.x = Mathf.Clamp(a.pos.x, MinX - 1, MaxX + 1);
-        if (a.z > 0.9f) return;
-        Vector2 separation = a.pos - new Vector2(CampX, -1.45f);
-        separation.y *= 2;
-        float distance = separation.magnitude;
-        if (distance > .0001f && distance < .7f + a.radius)
-        {
-            Vector2 push = separation * ((.7f + a.radius - distance) / distance);
-            push.y *= .5f;
-            a.pos += push;
-        }
     }
 
     public static bool OutOfView(float x, float margin)
@@ -45,11 +55,12 @@ public static class World
     public static void Build(Transform root, Transform cam)
     {
         lockMin = -999; lockMax = 999;
+        trunks.Clear();
         ForestScenery.Build(root);
         var vignette = Art.New("fx_vignette", cam, new Vector3(0, 0, 9), 100, "Foreground");
         vignette.color = new Color(1, 1, 1, .22f);
         vignette.gameObject.AddComponent<ViewportOverlay>();
-        shrine = EndCampfire.Create(root, new Vector2(CampX, -1.55f)).transform;
+        // No end campfire: the run ends when the Bone Warden dies (Game.BossDeathSeq).
     }
 }
 
@@ -58,16 +69,31 @@ public class CameraRig : MonoBehaviour
 {
     public static CameraRig I; public Camera cam;
     float x, velX, look, lockCenter, shakeAmp, shakeT, shakeDur; bool locked;
+    // The furthest right the camera may sit during a held fight, so the view stops
+    // at the same invisible wall the player does instead of panning past it.
+    float camMax = 9999f;
+    // Zoomed in 25% from the old 4.5 so the knight, enemies and scenery fill more of
+    // the frame. The view also sits ViewDrop below the ground line so the front of the
+    // lane (feet at MinY -3.85) keeps the same ~0.55 of floor below it it always had.
+    public const float ViewHalfHeight = 3.6f, ViewDrop = -.8f;
     public float HalfW => cam.orthographicSize * cam.aspect;
 
     void Awake() { I = this; cam = GetComponent<Camera>(); }
 
     public void Shake(float amp, float dur) { if (amp >= shakeAmp * (shakeDur > 0 ? shakeT / shakeDur : 0)) { shakeAmp = amp; shakeT = dur; shakeDur = dur; } }
-    public void Lock(float center) { locked = true; lockCenter = center; World.lockMin = center - HalfW + 0.5f; World.lockMax = center + HalfW - 0.5f; }
-    public void Unlock() { locked = false; World.lockMin = -999; World.lockMax = 999; }
+    public void Lock(float center) { locked = true; camMax = 9999f; lockCenter = center; World.lockMin = center - HalfW + 0.5f; World.lockMax = center + HalfW - 0.5f; }
+    /// Holds the far side of a fight without pinning the camera. You can give ground
+    /// and the view comes with you; you just cannot walk out the front of it.
+    public void HoldForward(float center) { locked = false; camMax = center; World.lockMin = -999; World.lockMax = center + HalfW - 0.5f; }
+    public void Unlock() { locked = false; camMax = 9999f; World.lockMin = -999; World.lockMax = 999; }
     public void SnapTo(float px) { x = Clamp(px); velX = 0; Apply(Vector2.zero); }
-    float Clamp(float v) { return Mathf.Clamp(v, World.MinX + HalfW - 1.2f, World.MaxX - HalfW + 1.2f); }
-    void Apply(Vector2 o) { transform.position = new Vector3(x + o.x, World.Height(x) + o.y, -10); }
+    float Clamp(float v)
+    {
+        float lo = World.MinX + HalfW - 1.2f;
+        float hi = Mathf.Min(World.MaxX - HalfW + 1.2f, camMax);
+        return Mathf.Clamp(v, lo, Mathf.Max(lo, hi));
+    }
+    void Apply(Vector2 o) { transform.position = new Vector3(x + o.x, World.Height(x) + ViewDrop + o.y, -10); }
 
     void LateUpdate()
     {

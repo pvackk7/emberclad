@@ -21,10 +21,15 @@ public static class Art
         // storybook set, so they are no longer loaded (that alone was ~100 MB of RAM).
         StorybookArt.Load(sprites);
         CharacterArt.Load(sprites);
-        var coin = Resources.Load<Texture2D>("Art/ui_coin");
+        // ui_coin_hud is the 1254 px painting pre-shrunk to 128 px with a proper
+        // (Lanczos) filter. The coin is only ever drawn ~40-90 px wide, and letting the
+        // GPU shrink the full painting that far is what made the face look gritty.
+        // Pixels-per-unit scales with it so the coin keeps the same size everywhere.
+        var coin = Resources.Load<Texture2D>("Art/ui_coin_hud");
+        if (coin == null) coin = Resources.Load<Texture2D>("Art/ui_coin");
         if (coin != null)
         {
-            var s = Sprite.Create(coin, new Rect(0, 0, coin.width, coin.height), new Vector2(.5f, .5f), 300, 0, SpriteMeshType.FullRect);
+            var s = Sprite.Create(coin, new Rect(0, 0, coin.width, coin.height), new Vector2(.5f, .5f), coin.width * 300f / 1254f, 0, SpriteMeshType.FullRect);
             s.name = "ui_coin"; sprites["ui_coin"] = s;
         }
     }
@@ -303,7 +308,11 @@ public class Fx : MonoBehaviour
         for (int i = 0; i < n; i++)
         {
             Vector2 v = new Vector2(Random.Range(-1.2f, 1.2f), Random.Range(1f, 3.4f)) * size;
-            Emit("fx_flame" + Random.Range(1, 4), p + Random.insideUnitCircle * 0.25f * size, v, Random.Range(0.25f, 0.5f), 0.5f * size, 0.1f * size, Color.white, new Color(1, 0.4f, 0.2f, 0), Random.Range(-15, 15f), 0, -1, false, 3002, -999, 1.5f);
+            float radius = Random.Range(.10f, .23f) * size;
+            float angle = Mathf.Atan2(v.y, v.x) * Mathf.Rad2Deg;
+            Emit("fx_soft", p + Random.insideUnitCircle * .20f * size, v, Random.Range(.20f, .42f),
+                radius, .02f * size, new Color(1f, .78f, .32f), new Color(.95f, .18f, .04f, 0),
+                angle, 0, .8f, true, 3002, -999, 1.5f, null, 2.2f, .65f);
         }
         Emit("fx_glow", p, Vector2.zero, 0.3f, 2.4f * size, 3.6f * size, new Color(1, 0.6f, 0.2f, 0.6f), new Color(1, 0.4f, 0.1f, 0), 0, 0, 0, true);
     }

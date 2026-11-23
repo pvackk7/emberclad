@@ -11,6 +11,7 @@ public partial class Hud
     GameObject menuWisp;
     Image menuShade;
     bool pauseMenu, loading, awaitingBindingRelease;
+    MenuDragonFlight menuDragon;
     int page, binding = -1;
     float loadUntil;
     Text bindingLabel;
@@ -34,7 +35,10 @@ public partial class Hud
         var bg = Full("Backdrop", titlePanel).gameObject.AddComponent<Image>();
         menuBackdrop = bg.gameObject;
         bg.raycastTarget = false;
-        var painting = Resources.Load<Texture2D>("Menu/TitleBackground");
+        // The menu backdrop is the blue night-haze painting. The old tavern painting
+        // (Menu/TitleBackground) is no longer shown here; it stays in the project only
+        // because the forest's moon still samples its texture.
+        var painting = Resources.Load<Texture2D>("Menu/MenuBackground");
         if (painting != null)
         {
             bg.sprite = Sprite.Create(painting, new Rect(0, 0, painting.width, painting.height), new Vector2(0.5f, 0.5f), 100);
@@ -44,14 +48,21 @@ public partial class Hud
             fit.aspectRatio = (float)painting.width / painting.height;
         }
         else bg.color = new Color(0.04f, 0.035f, 0.05f, 1);
-        var atmosphere = Full("Living fire and chimney smoke", bg.transform).gameObject.AddComponent<MenuAtmosphere>();
-        atmosphere.paintedTavern = painting != null;
-        atmosphere.raycastTarget = false;
-        if (painting != null) Full("Animated campfire", bg.transform).gameObject.AddComponent<MenuCampfireGraphic>();
         menuShade = Full("Shade", titlePanel).gameObject.AddComponent<Image>();
         menuShade.color = new Color(0.02f, 0.03f, 0.04f, 0.08f);
+        // The distant dragon: over the sky backdrop and shade, under the wisp, title and buttons.
+        var dragonFrames = MenuDragonFlight.LoadFrames();
+        if (dragonFrames.Length > 0)
+        {
+            var dragonGo = new GameObject("MenuDragon", typeof(RectTransform), typeof(Image));
+            dragonGo.transform.SetParent(titlePanel, false);
+            var dragon = dragonGo.AddComponent<MenuDragonFlight>();
+            menuDragon = dragon;
+            dragon.wingFrames = dragonFrames;
+            dragon.showWith = menuBackdrop;
+        }
         menuWisp = Full("Wandering fire ember", titlePanel).gameObject;
-        menuWisp.AddComponent<MenuFireWisp>();
+        // The yellow fire wisp was removed at the user's request (2026-11-23); MenuFireWisp.cs is unused. The empty object stays so the show/hide calls keep working.
         menuContent = Full("Content", titlePanel);
         MenuPage(0);
     }
@@ -97,7 +108,7 @@ public partial class Hud
         Button first = null;
         if (next == 0)
         {
-            first = MenuButton(pauseMenu ? "Resume" : "Play", 30, () => { if (pauseMenu) ClosePause(); else BeginLoading(); });
+            first = MenuButton(pauseMenu ? "Resume" : "Play", 30, () => { if (pauseMenu) ClosePause(); else OpenNicknamePage(); });
             MenuButton("Options", -75, () => MenuPage(1));
             MenuButton(pauseMenu ? "Return to Menus" : "Exit", -180, () => { if (pauseMenu) game.ReturnToMenu(); else ExitGame(); });
         }
@@ -145,10 +156,10 @@ public partial class Hud
     void BeginLoading()
     {
         loading = true; loadUntil = Time.unscaledTime + 1.6f;
+        if (menuDragon != null) menuDragon.PassNow();   // the big dragon sweeps through while the forest loads
         foreach (Transform child in menuContent) { child.gameObject.SetActive(false); Destroy(child.gameObject); }
         Txt("Entering the forest…", menuContent, center, new Vector2(0, -250), new Vector2(1000, 70), 38, Gold);
-        string[] tips = { "Heavy attacks break a raised shield. Strike during the stagger.", "Defeated enemies grant Cinders and XP.", "Time your roll through a strike. Save stamina for the next attack.", "Hold G and aim right to equip potions. Release G, then click to drink." };
-        Txt(tips[Random.Range(0, tips.Length)], menuContent, center, new Vector2(0, -340), new Vector2(1500, 60), 28, Cream);
+        if (!string.IsNullOrEmpty(unrankedNote)) Txt(unrankedNote, menuContent, center, new Vector2(0, -410), new Vector2(1500, 50), 24, Gold);
         EventSystem.current.SetSelectedGameObject(null);
     }
 
@@ -161,6 +172,7 @@ public partial class Hud
     void TickMenu()
     {
         if (IntroOpen) return;
+        if (TickNickname()) return;
         if (loading)
         {
             if (Time.unscaledTime >= loadUntil) { loading = false; titleCg.blocksRaycasts = false; titleCg.interactable = false; game.StartFromMenu(); }
@@ -200,11 +212,17 @@ public partial class Hud
         }
     }
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+    [System.Runtime.InteropServices.DllImport("__Internal")] static extern void EmbercladExitToSite();
+#endif
+
     void ExitGame()
     {
         PlayerPrefs.Save();
 #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
+#elif UNITY_WEBGL
+        EmbercladExitToSite();   // back to the website's own Play screen (Plugins/WebGL/EmbercladSite.jslib)
 #else
         Application.Quit();
 #endif

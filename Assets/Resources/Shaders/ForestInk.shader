@@ -5,6 +5,9 @@ Shader "Emberclad/Forest Ink"
         _MainTex ("Illustration", 2D) = "white" {}
         [PerRendererData] _RendererColor ("Sprite colour", Color) = (1,1,1,1)
         _Moon ("Blue moon", Float) = 0
+        _UnlitGlass ("Unlit lantern glass", Float) = 0
+        _DistanceMist ("Distant forest haze", Float) = 0
+        _PineNight ("Moonlit pine foliage", Float) = 0
         _GrassOnly ("Grass in front of roots", Float) = 0
         _Lamplit ("Receives lantern light", Float) = 0
     }
@@ -21,7 +24,7 @@ Shader "Emberclad/Forest Ink"
             #include "UnityCG.cginc"
             sampler2D _MainTex;
             half4 _RendererColor;
-            half _Moon, _Lamplit, _GrassOnly;
+            half _DistanceMist, _UnlitGlass, _Moon, _Lamplit, _GrassOnly, _PineNight;
             float4 _ForestWick, _ForestPool;
             struct Input { float4 vertex: POSITION; float2 uv: TEXCOORD0; half4 color: COLOR; };
             struct Varying { float4 position: SV_POSITION; float2 uv: TEXCOORD0; float2 world: TEXCOORD1; half4 color: COLOR; };
@@ -41,13 +44,25 @@ Shader "Emberclad/Forest Ink"
                 half moss = smoothstep(.0015h,.008h,tex.g - tex.b);
                 half lip = smoothstep(.67h,.73h,i.uv.y);
                 alpha *= lerp(1.0h, moss * lip, _GrassOnly);
+                half foliage = step(tex.r, tex.g) * _PineNight;
+                half3 pine = tex.g * half3(.47h,.80h,.98h);
+                tex.rgb = lerp(tex.rgb, pine, foliage);
+                half brassLight = smoothstep(.06h,.20h,tex.r - tex.b);
+                tex.rgb = lerp(tex.rgb, half3(.012h,.019h,.024h) + tex.g * .035h, _UnlitGlass * brassLight);
                 half shade = saturate(dot(tex.rgb, half3(.20h,.70h,.10h)) * 1.75h);
                 half3 lunar = lerp(half3(.045h,.20h,.35h), half3(.42h,.87h,1.0h), shade);
                 half3 ink = lerp(tex.rgb, lunar, _Moon) * i.color.rgb;
-                float2 local = (i.world - _ForestWick.xy) * float2(.75, 1.12);
-                float2 ground = (i.world - _ForestPool.xy) * float2(.49, 1.62);
-                half light = max(saturate(1 - dot(local,local)), saturate(1 - dot(ground,ground)) * .72h);
-                ink += _Lamplit * _ForestWick.z * light * light * (.085h + ink) * half3(.86h,.38h,.075h);
+                ink = lerp(ink, half3(.016h, .032h, .049h), _DistanceMist);
+                // Lantern light: a bright inner lobe, a wide soft lobe and a pool along the
+                // ground under the post. All three are Gaussians, so there is no edge anywhere;
+                // the light just thins out into the night. It scales the surface's own colour
+                // (lit ground, bark, grass, rock) instead of adding orange to the air in front.
+                float2 dl = (i.world - _ForestWick.xy) * float2(.82, 1.0);
+                float2 dg = (i.world - _ForestPool.xy) * float2(.5, 1.5);
+                float r2 = dot(dl, dl), g2 = dot(dg, dg);
+                half light = .62h * exp(-r2 * .95h) + .70h * exp(-r2 * .09h) + .34h * exp(-g2 * .55h);
+                light *= _Lamplit * _ForestWick.z;
+                ink += light * half3(1.0h, .55h, .22h) * (ink * 2.8h + .006h);
                 return half4(ink, alpha);
             }
             ENDCG

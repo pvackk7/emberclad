@@ -6,7 +6,7 @@ using UnityEngine.InputSystem;
 public partial class Hud
 {
     RectTransform introPanel;
-    Text introHeading, introBody, introNextLabel, introCount;
+    Text introHeading, introNextLabel;
     Button introNext;
     float introOpenedAt;
     public bool IntroOpen { get; private set; }
@@ -19,29 +19,30 @@ public partial class Hud
         // plate still dismisses. Going through the EventSystem rather than polling the
         // mouse means gamepad and touch get the same behaviour for free.
         introPanel.gameObject.AddComponent<Button>().onClick.AddListener(CloseIntro);
-        // Taller than it needs to be on purpose: the old 380 left the buttons sitting
-        // on the bottom rim with nothing under them, which is what made them look cut off.
-        var box = Rect("Stone guide", introPanel, center, Vector2.zero, new Vector2(880, 440), center);
+        // Built to the same recipe as a teaching card -- same plate, same gold
+        // uppercase heading, same key caps down the left -- because this is the first
+        // lesson the game gives and it was the one screen that looked like it came
+        // from somewhere else.
+        Vector2 TC = new Vector2(.5f, 1);
+        const float W = 500f;
+        var box = Rect("Stone guide", introPanel, center, Vector2.zero, new Vector2(W, 330), center);
         box.gameObject.AddComponent<MenuPlateGraphic>().raycastTarget = true;
-        introCount = Txt("", box, center, new Vector2(0, 178), new Vector2(600, 28), 19, Gold, TextAnchor.MiddleCenter, null, false);
-        introHeading = Txt("", box, center, new Vector2(0, 124), new Vector2(780, 64), 42, Cream, TextAnchor.MiddleCenter, null, false);
+        introHeading = Txt("", box, TC, new Vector2(0, -24), new Vector2(W - 60, 44), 32, Gold, TextAnchor.MiddleCenter, TC, false);
         if (menuTitleFont != null) introHeading.font = menuTitleFont;
-        introBody = Txt("", box, center, new Vector2(0, 10), new Vector2(760, 180), 26, Cream, TextAnchor.MiddleCenter, null, false);
-        introBody.horizontalOverflow = HorizontalWrapMode.Wrap; introBody.lineSpacing = 1.34f;
-        // One way out, not two. Skip and Begin did the same thing and asking which one
-        // you meant was the only decision the panel ever offered.
-        introNext = IntroButton("Begin", box, new Vector2(0, -132), CloseIntro);
+        // Just the keys: they say everything the panel needs to.
+        KeyBlock(box, -86f, new[] { new[] { "W", "A", "S", "D" }, new[] { "SPACE" }, new[] { "F" } }, new[] { "Move", "Jump", "Roll" });
+        introNext = IntroButton("Begin", box, new Vector2(0, -236), CloseIntro, TC);
         introNextLabel = introNext.GetComponentsInChildren<Text>()[0];
-        Txt("or click anywhere to continue", box, center, new Vector2(0, -196), new Vector2(700, 28), 19, new Color(.60f, .54f, .47f), TextAnchor.MiddleCenter, null, false);
         introPanel.gameObject.SetActive(false);
     }
 
-    Button IntroButton(string label, Transform parent, Vector2 position, UnityEngine.Events.UnityAction action)
+    Button IntroButton(string label, Transform parent, Vector2 position, UnityEngine.Events.UnityAction action, Vector2? anchor = null)
     {
-        var rt = Rect(label, parent, center, position, new Vector2(330, 78), center);
+        Vector2 a = anchor ?? center;
+        var rt = Rect(label, parent, a, position, new Vector2(300, 72), a);
         var plate = rt.gameObject.AddComponent<MenuPlateGraphic>(); plate.raycastTarget = true;
-        var text = Txt(label, rt, center, Vector2.zero, new Vector2(270, 62), 30, Cream, TextAnchor.MiddleCenter, null, false);
-        var marker = Txt("◆", rt, center, new Vector2(-130, 0), new Vector2(20, 25), 12, Gold, TextAnchor.MiddleCenter, null, false);
+        var text = Txt(label, rt, center, Vector2.zero, new Vector2(248, 58), 28, Cream, TextAnchor.MiddleCenter, null, false);
+        var marker = Txt("◆", rt, center, new Vector2(-116, 0), new Vector2(20, 25), 12, Gold, TextAnchor.MiddleCenter, null, false);
         var button = rt.gameObject.AddComponent<MenuFocusButton>(); button.targetGraphic = plate; button.Configure(plate, text, marker); button.onClick.AddListener(action);
         return button;
     }
@@ -58,9 +59,9 @@ public partial class Hud
     {
         // One page, and only the things no fight can teach: where the legs are. Weapons,
         // the shield and Embers are each introduced by their own round in the forest.
-        introCount.text = "";
-        introHeading.text = "Find your footing";
-        introBody.text = $"Move: {MenuSettings.Binding(0)} / {MenuSettings.Binding(1)} / {MenuSettings.Binding(2)} / {MenuSettings.Binding(3)}\nJump: {MenuSettings.Binding(7)}     Roll: {MenuSettings.Binding(8)}\nRoll through a strike. You are vulnerable as you land.";
+        introHeading.text = "FIND YOUR FOOTING";
+        // The keys are key caps now, so the body is left with the one thing the caps
+        // cannot say.
         introNextLabel.text = "Begin";
         MenuFocusButton.KeyboardFocus = false;
         EventSystem.current.SetSelectedGameObject(null);

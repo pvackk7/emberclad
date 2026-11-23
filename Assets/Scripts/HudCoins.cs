@@ -37,7 +37,7 @@ public partial class Hud
         // The icon says what the number is; a caption would only repeat it.
         cinderPlate = FramedPanel("Cinders", root, BR, new Vector2(-34, 34), PlateSize);
         cinderPlate.pivot = BR;
-        Img("ui_coin", cinderPlate, BR, CoinSlot, new Vector2(40, 40), Color.white, new Vector2(0.5f, 0.5f));
+        Img("ui_coin", cinderPlate, BR, CoinSlot, new Vector2(44, 44), Color.white, new Vector2(0.5f, 0.5f));
         cinderText = Txt("0", cinderPlate, BR, new Vector2(-20, PlateSize.y / 2), new Vector2(140, 40), 32, Gold, TextAnchor.MiddleRight, new Vector2(1, 0.5f));
     }
 

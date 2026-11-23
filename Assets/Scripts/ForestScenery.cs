@@ -211,7 +211,10 @@ public sealed class ForestScenery : MonoBehaviour
         material = new Material(Shader.Find("Sprites/Default"));
         var sky = new Ink();
         sky.Band(C("130c2d"), x => 20, x => -15); sky.Gradient(C("130c2d"), C("493070"), 5, -3);
-        sky.Oval(C("655087"), 10, 3.2f, .85f, .85f, 40); sky.Oval(C("e9e5bd"), 10, 3.2f, .60f, .60f, 40); sky.Oval(C("26183e"), 10.24f, 3.39f, .56f, .56f, 40);
+        sky.Oval(C("8fb8c2"), 10f, 3.2f, .76f, .76f, 96);
+        sky.Oval(C("84aeb9"), 9.77f, 3.43f, .16f, .13f, 32);
+        sky.Oval(C("9ac0c9"), 10.22f, 3.10f, .21f, .17f, 36);
+        sky.Oval(C("85adb7"), 10.05f, 2.89f, .11f, .08f, 28);
         var stars = new System.Random(322);
         for (int i = 0; i < 160; i++)
         {

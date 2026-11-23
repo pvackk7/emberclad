@@ -54,6 +54,28 @@
   .sigil{width:140px;height:1px;margin:2.6rem auto 0;background:linear-gradient(90deg,transparent,var(--gold),transparent);opacity:.5}
 
 
+  .play{border-top:1px solid var(--line);text-align:center}
+  .play h2{font-family:Cinzel,serif;font-weight:400;color:#d8cdb4;font-size:clamp(1.4rem,3.6vw,2.2rem);letter-spacing:.06em;margin:0 0 2.4rem}
+  .game{position:relative;max-width:1080px;margin:0 auto;aspect-ratio:16/9;border:1px solid var(--line);overflow:hidden;
+        background:#050507 url(img/video-poster.jpg) center/cover no-repeat;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+  .game::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(5,5,7,.35),rgba(5,5,7,.85));transition:opacity .8s}
+  .game.running::before{opacity:0}
+  .game canvas{position:absolute;inset:0;width:100%;height:100%;display:block;background:#000;opacity:0;transition:opacity .8s}
+  .game.running canvas{opacity:1}
+  .start{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:none;border:0;cursor:pointer;color:var(--gold);font:inherit}
+  .start svg{width:clamp(64px,9vw,92px);height:auto;filter:drop-shadow(0 0 14px rgba(201,184,122,.35));transition:transform .5s,filter .5s}
+  .start:hover svg,.start:focus-visible svg{transform:scale(1.07);filter:drop-shadow(0 0 22px rgba(201,184,122,.6))}
+  .start:focus-visible{outline:none}
+  .start .label,.loading .label{font-family:Cinzel,serif;letter-spacing:.4em;padding-left:.4em;font-size:clamp(.75rem,1.6vw,.95rem);color:#d8cdb4}
+  .start .sub{font-style:italic;color:var(--dim);font-size:.95rem}
+  .loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px}
+  .loading[hidden],.fs[hidden],.start[hidden]{display:none}
+  .bar{width:min(320px,60%);height:2px;background:rgba(201,184,122,.15)}
+  .fill{height:100%;width:0;background:var(--gold);box-shadow:0 0 10px rgba(201,184,122,.6);transition:width .3s}
+  .fs{position:absolute;right:12px;bottom:12px;width:40px;height:40px;display:grid;place-items:center;border:1px solid var(--line);background:rgba(7,7,10,.6);color:var(--gold);cursor:pointer;opacity:.6;transition:opacity .3s}
+  .fs:hover{opacity:1}
+  .fs svg{width:20px;height:20px}
+  .hint{color:var(--dim);font-style:italic;font-size:.95rem;margin:1.2rem 0 0}
   .board{border-top:1px solid var(--line);text-align:center}
   .board h2{font-family:Cinzel,serif;font-weight:400;color:#d8cdb4;font-size:clamp(1.4rem,3.6vw,2.2rem);letter-spacing:.06em;margin:0 0 1rem}
   .board .note{max-width:560px;margin:0 auto 2.6rem;color:var(--dim);font-size:1.05rem;line-height:1.6}
@@ -117,6 +139,28 @@
       <div class="sigil rise" aria-hidden="true"></div>
     </div>
   </section>
+  <section id="play" class="play">
+    <div class="wrap">
+      <p class="eyebrow rise">PLAY</p>
+      <h2 class="rise">Take up the flame</h2>
+      <div class="game rise" id="game">
+        <canvas id="unity-canvas" tabindex="-1" aria-label="Emberclad game"></canvas>
+        <button class="start" id="start" type="button">
+          <svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="30" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M26 20l18 12-18 12z" fill="currentColor"/></svg>
+          <span class="label">PLAY IN BROWSER</span>
+          <span class="sub">About 40 MB &middot; best on a computer with a keyboard</span>
+        </button>
+        <div class="loading" id="loading" hidden>
+          <span class="label">KINDLING&hellip;</span>
+          <div class="bar"><div class="fill" id="fill"></div></div>
+        </div>
+        <button class="fs" id="fs" type="button" hidden aria-label="Fullscreen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+        </button>
+      </div>
+      <p class="hint rise" id="hint">Click the game once it loads so it can hear your keys.</p>
+    </div>
+  </section>
   <section id="leaderboard" class="board">
     <div class="wrap">
       <p class="eyebrow rise">THE LEADERBOARD</p>
@@ -149,6 +193,29 @@
     });
     document.addEventListener('visibilitychange', function () { if (!document.hidden) go(); });
     document.getElementById('yr').textContent = new Date().getFullYear();
+    // Browser game: load the Unity build only when Play is clicked.
+    var game = document.getElementById('game'), startBtn = document.getElementById('start'), loading = document.getElementById('loading'),
+        fill = document.getElementById('fill'), fsBtn = document.getElementById('fs'), canvas = document.getElementById('unity-canvas'), unity = null;
+    startBtn.addEventListener('click', function () {
+      if (location.protocol === 'file:') { startBtn.querySelector('.sub').textContent = 'The game runs on emberclad.org, not in this preview file.'; return; }
+      startBtn.hidden = true; loading.hidden = false;
+      var b = '/play/Build/WebGL_staging';
+      var sc = document.createElement('script'); sc.src = b + '.loader.js';
+      sc.onload = function () {
+        createUnityInstance(canvas, {
+          dataUrl: b + '.data.br', frameworkUrl: b + '.framework.js.br', codeUrl: b + '.wasm.br',
+          streamingAssetsUrl: '/play/StreamingAssets', companyName: 'Emberclad', productName: 'Emberclad', productVersion: '1.0',
+          showBanner: function (m, t) { if (t === 'error') console.error(m); }
+        }, function (p) { fill.style.width = Math.round(p * 100) + '%'; }).then(function (inst) {
+          unity = inst; loading.hidden = true; game.classList.add('running'); fsBtn.hidden = false; canvas.focus();
+        }).catch(function (e) {
+          console.error(e); loading.querySelector('.label').textContent = 'THE FLAME WOULD NOT CATCH. RELOAD TO TRY AGAIN.';
+        });
+      };
+      sc.onerror = function () { loading.querySelector('.label').textContent = 'COULD NOT REACH THE GAME. RELOAD TO TRY AGAIN.'; };
+      document.body.appendChild(sc);
+    });
+    fsBtn.addEventListener('click', function () { if (unity) unity.SetFullscreen(1); });
     // Leaderboard
     var rows = document.getElementById('board-rows');
     function fmt(ms) {

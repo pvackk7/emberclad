@@ -138,9 +138,51 @@ async function leaderboard(url, env) {
   return json({ entries }, 200, { 'Cache-Control': 'public, max-age=15' });
 }
 
+// ---- Browser game files (website/play/Build) ----
+// Unity's Brotli files need Content-Encoding: br. Files over Cloudflare's 25 MiB asset limit are stored
+// as name.part0, name.part1, ... and streamed back together here.
+const GAME_TYPES = { '.data': 'application/octet-stream', '.wasm': 'application/wasm', '.js': 'application/javascript' };
+
+async function assetOrNull(env, request, pathname) {
+  const u = new URL(request.url); u.pathname = pathname; u.search = '';
+  const res = await env.ASSETS.fetch(new Request(u.toString(), { method: 'GET' }));
+  return res.ok ? res : null;
+}
+
+async function serveGameFile(request, env, url) {
+  const path = url.pathname;
+  if (!path.endsWith('.br')) return env.ASSETS.fetch(request);
+  const inner = path.slice(0, -3);
+  const type = GAME_TYPES[inner.slice(inner.lastIndexOf('.'))] || 'application/octet-stream';
+  const headers = { 'Content-Type': type, 'Content-Encoding': 'br', 'Cache-Control': 'public, max-age=3600' };
+
+  const whole = await assetOrNull(env, request, path);
+  if (whole) {
+    const len = whole.headers.get('content-length'); if (len) headers['Content-Length'] = len;
+    return new Response(request.method === 'HEAD' ? null : whole.body, { headers, encodeBody: 'manual' });
+  }
+  const parts = [];
+  for (let i = 0; i < 20; i++) {
+    const part = await assetOrNull(env, request, path + '.part' + i);
+    if (!part) break;
+    parts.push(part);
+  }
+  if (!parts.length) return new Response('Not found', { status: 404 });
+  const lens = parts.map(p => Number(p.headers.get('content-length')));
+  if (lens.every(n => n > 0)) headers['Content-Length'] = String(lens.reduce((a, b) => a + b, 0));
+  if (request.method === 'HEAD') { parts.forEach(p => p.body && p.body.cancel()); return new Response(null, { headers }); }
+  const { readable, writable } = new TransformStream();
+  (async () => {
+    for (const p of parts) await p.body.pipeTo(writable, { preventClose: true });
+    await writable.close();
+  })().catch(e => console.error('game stream', e));
+  return new Response(readable, { headers, encodeBody: 'manual' });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname.startsWith('/play/Build/')) return serveGameFile(request, env, url);
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
     try {

@@ -10,33 +10,110 @@
 <meta name="theme-color" content="#07070a">
 <link rel="icon" href="img/favicon.png">
 <link rel="preload" href="img/title.png" as="image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400&family=EB+Garamond:ital@0;1&display=swap" rel="stylesheet">
 <style>
-  html,body{margin:0;height:100%;background:#07070a;overflow:hidden}
-  .stage{position:fixed;inset:0;background:#07070a url(img/video-poster.jpg) center/cover no-repeat}
+  :root{--bg:#07070a;--ink:#b7ad9b;--dim:#6b6457;--gold:#c9b87a;--line:rgba(201,184,122,.14)}
+  html{scroll-behavior:smooth}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"EB Garamond",Georgia,serif}
+  body{overflow-x:hidden}
+
+  /* HERO */
+  .stage{position:relative;height:100vh;height:100svh;overflow:hidden;background:var(--bg) url(img/video-poster.jpg) center/cover no-repeat}
   .stage video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;filter:saturate(.85)}
-  /* hide any built-in play/start button browsers may draw */
   .stage video::-webkit-media-controls,
   .stage video::-webkit-media-controls-start-playback-button,
   .stage video::-webkit-media-controls-overlay-play-button{display:none!important;-webkit-appearance:none}
   .shade{position:absolute;inset:0;pointer-events:none;background:
       radial-gradient(ellipse at 50% 45%,rgba(7,7,10,0) 35%,rgba(7,7,10,.7) 100%),
-      linear-gradient(to bottom,rgba(7,7,10,.25) 0%,rgba(7,7,10,0) 35%,rgba(7,7,10,.55) 75%,rgba(7,7,10,.92) 100%)}
-  h1{position:absolute;left:50%;bottom:clamp(28px,8vh,96px);transform:translateX(-50%);margin:0;width:min(78vw,1100px);
+      linear-gradient(to bottom,rgba(7,7,10,.25) 0%,rgba(7,7,10,0) 35%,rgba(7,7,10,.55) 72%,var(--bg) 100%)}
+  h1{position:absolute;left:50%;bottom:clamp(110px,19vh,210px);transform:translateX(-50%);margin:0;width:min(74vw,1050px);
      filter:drop-shadow(0 6px 24px rgba(0,0,0,.85))}
   h1 img{display:block;width:100%;height:auto}
-  @media (max-aspect-ratio:1/1){ h1{width:88vw;bottom:auto;top:50%;transform:translate(-50%,-50%)} }
+
+  /* ARROW */
+  .descend{position:absolute;left:50%;bottom:clamp(22px,5vh,52px);transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:10px;
+           color:var(--gold);text-decoration:none;opacity:.8;transition:opacity .4s}
+  .descend:hover,.descend:focus-visible{opacity:1;outline:none}
+  .descend span{font-family:Cinzel,serif;font-size:.62rem;letter-spacing:.45em;padding-left:.45em;color:var(--dim);transition:color .4s}
+  .descend:hover span{color:var(--gold)}
+  .descend svg{width:34px;height:52px;overflow:visible;animation:sink 2.6s ease-in-out infinite;filter:drop-shadow(0 0 6px rgba(201,184,122,.35))}
+  .descend .stem{stroke-dasharray:40;animation:draw 2.6s ease-in-out infinite}
+  @keyframes sink{0%,100%{transform:translateY(0);opacity:.55}50%{transform:translateY(9px);opacity:1}}
+  @keyframes draw{0%{stroke-dashoffset:40}45%,100%{stroke-dashoffset:0}}
+
+  /* BELOW */
+  section{padding:clamp(72px,12vw,140px) clamp(16px,5vw,48px)}
+  .wrap{max-width:1080px;margin:0 auto}
+  .intro{text-align:center}
+  .eyebrow{font-family:Cinzel,serif;font-size:.7rem;letter-spacing:.4em;color:var(--gold);opacity:.75;margin:0 0 1.2rem}
+  .intro h2{font-family:Cinzel,serif;font-weight:400;color:#d8cdb4;font-size:clamp(1.5rem,4vw,2.4rem);letter-spacing:.06em;line-height:1.3;margin:0 auto 1.4rem;max-width:760px}
+  .intro p{font-size:clamp(1.05rem,2.2vw,1.2rem);line-height:1.7;max-width:620px;margin:0 auto}
+  .sigil{width:140px;height:1px;margin:2.6rem auto 0;background:linear-gradient(90deg,transparent,var(--gold),transparent);opacity:.5}
+
+  .stills{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:clamp(48px,7vw,80px)}
+  .stills figure{margin:0;position:relative;border:1px solid var(--line);overflow:hidden;aspect-ratio:16/9}
+  .stills img{width:100%;height:100%;object-fit:cover;display:block;filter:saturate(.75) brightness(.8);transition:filter .8s,transform 1.2s}
+  .stills figure:hover img{filter:saturate(.9) brightness(.95);transform:scale(1.03)}
+  .stills figure::after{content:"";position:absolute;inset:0;box-shadow:inset 0 0 50px rgba(0,0,0,.8);pointer-events:none}
+
+  footer{padding:40px 16px 56px;text-align:center;border-top:1px solid var(--line);color:var(--dim);font-size:.85rem}
+  footer b{display:block;font-family:Cinzel,serif;font-weight:400;letter-spacing:.35em;color:var(--ink);margin-bottom:.4rem}
+
+  .js .rise{opacity:0;transform:translateY(16px);transition:opacity 1.3s ease,transform 1.3s ease}
+  .js .rise.in{opacity:1;transform:none}
+
+  @media (max-aspect-ratio:1/1){ h1{width:88vw;bottom:auto;top:46%;transform:translate(-50%,-50%)} }
+  @media (max-width:720px){ .stills{grid-template-columns:1fr} }
+  @media (prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto}
+    .descend svg,.descend .stem{animation:none}
+    .js .rise{opacity:1;transform:none;transition:none}
+  }
 </style>
+<script>document.documentElement.className='js'</script>
 </head>
 <body>
-<main class="stage">
+<header class="stage">
   <video id="bg" autoplay muted loop playsinline webkit-playsinline disablepictureinpicture disableremoteplayback preload="auto" poster="img/video-poster.jpg" aria-hidden="true" tabindex="-1">
     <source src="video/emberclad-demo.mp4" type="video/mp4">
   </video>
   <div class="shade" aria-hidden="true"></div>
   <h1><img src="img/title.png" alt="Emberclad" width="1400" height="257"></h1>
+  <a class="descend" href="#tale" aria-label="Scroll down">
+    <svg viewBox="0 0 34 52" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path class="stem" d="M17 2v38"/>
+      <path d="M6 32l11 12 11-12"/>
+      <path d="M17 47l-3 3 3 2 3-2z" fill="currentColor" stroke="none"/>
+    </svg>
+    <span>DESCEND</span>
+  </a>
+</header>
+
+<main>
+  <section id="tale" class="intro">
+    <div class="wrap">
+      <p class="eyebrow rise">THE FOREST REMEMBERS</p>
+      <h2 class="rise">A lone knight walks a road the light gave up on</h2>
+      <p class="rise">Lanterns gutter along broken stone. The dead rise from the moss. Somewhere above the pines, wings blot out the moon. Raise your shield, strike in the stagger, and keep the embers lit for as long as you can.</p>
+      <div class="sigil rise" aria-hidden="true"></div>
+
+      <div class="stills">
+        <figure class="rise"><img src="img/still-dragon.jpg" alt="A dragon's silhouette against a violet night sky" loading="lazy" width="1200" height="586"></figure>
+        <figure class="rise"><img src="img/still-fire.jpg" alt="The knight hurling a burst of fire at a skeleton" loading="lazy" width="1200" height="586"></figure>
+        <figure class="rise"><img src="img/still-skeleton.jpg" alt="A skeleton warrior advancing on the knight across cobblestones" loading="lazy" width="1200" height="586"></figure>
+      </div>
+    </div>
+  </section>
 </main>
+
+<footer>
+  <b>EMBERCLAD</b>
+  In development &middot; &copy; <span id="yr">2026</span>
+</footer>
+
 <script>
-  // Start the video without a play button, and retry on first touch if the browser held it back.
   (function () {
     var v = document.getElementById('bg');
     v.muted = true; v.defaultMuted = true;
@@ -46,6 +123,14 @@
       window.addEventListener(e, go, { once: true, passive: true });
     });
     document.addEventListener('visibilitychange', function () { if (!document.hidden) go(); });
+    document.getElementById('yr').textContent = new Date().getFullYear();
+    var els = document.querySelectorAll('.rise');
+    if ('IntersectionObserver' in window) {
+      var io = new IntersectionObserver(function (es) {
+        es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+      }, { threshold: 0.15 });
+      els.forEach(function (el) { io.observe(el); });
+    } else { els.forEach(function (el) { el.classList.add('in'); }); }
   })();
 </script>
 </body>

@@ -31,9 +31,21 @@ public class Game : MonoBehaviour
     public float LevelProgress { get { LevelFromXp(out int lv, out int left); return Mathf.Clamp01((float)left / XpForLevel(lv)); } }
     bool rewardsDirty;
     float rewardSaveTimer;
+    static bool sessionRewardsLoaded;
+    static int sessionCinders, sessionExperience;
+    static bool sessionShield;
+
+    void CacheRewards()
+    {
+        sessionCinders = Cinders;
+        sessionExperience = Experience;
+        sessionShield = HasShield;
+        sessionRewardsLoaded = true;
+    }
 
     void SaveRewards()
     {
+        CacheRewards();
         if (!rewardsDirty) return;
         PlayerPrefs.SetInt("Emberclad.Cinders", Cinders);
         PlayerPrefs.SetInt("Emberclad.Experience", Experience);
@@ -64,13 +76,20 @@ public class Game : MonoBehaviour
     public int EncounterIndex => encIdx;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-    static void ResetStatics() { autopilot = false; debugSpeed = 1f; checkpoint = 0; skipTitle = false; runTime = 0; falls = 0; runKills = 0; runBestCombo = 0; }
+    static void ResetStatics() { autopilot = false; debugSpeed = 1f; checkpoint = 0; skipTitle = false; runTime = 0; falls = 0; runKills = 0; runBestCombo = 0; sessionRewardsLoaded = false; }
 
     void Awake()
     {
-        Cinders = PlayerPrefs.GetInt("Emberclad.Cinders", 0);
-        Experience = PlayerPrefs.GetInt("Emberclad.Experience", 0);
-        HasShield = PlayerPrefs.GetInt("Emberclad.Shield", 0) == 1;
+        if (!sessionRewardsLoaded)
+        {
+            sessionCinders = PlayerPrefs.GetInt("Emberclad.Cinders", 0);
+            sessionExperience = PlayerPrefs.GetInt("Emberclad.Experience", 0);
+            sessionShield = PlayerPrefs.GetInt("Emberclad.Shield", 0) == 1;
+            sessionRewardsLoaded = true;
+        }
+        Cinders = sessionCinders;
+        Experience = sessionExperience;
+        HasShield = sessionShield;
         I = this; Time.timeScale = 1; Enemy.tokens = 0; Actor.All.Clear();
         Application.targetFrameRate = 60;
         Art.Load();
@@ -130,6 +149,7 @@ public class Game : MonoBehaviour
 
     void Reload(bool skip)
     {
+        SaveRewards();
         skipTitle = skip; Time.timeScale = 1;
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
@@ -239,8 +259,10 @@ public class Game : MonoBehaviour
         int before = Level;
         Cinders += cinders;
         Experience += xp;
+        CacheRewards();
         if (!rewardsDirty) rewardSaveTimer = 2f;
         rewardsDirty = true;
+        if (Level > before) SaveRewards();
         if (hud != null)
         {
             // Spray scales with what the thing was worth: a runt is a handful of
@@ -263,6 +285,7 @@ public class Game : MonoBehaviour
         if (kind == Pickup.Kind.Shield)
         {
             HasShield = true;
+            CacheRewards();
             if (!rewardsDirty) rewardSaveTimer = 2f;
             rewardsDirty = true;
             if (player != null) player.EquipShield();
@@ -303,6 +326,7 @@ public class Game : MonoBehaviour
 
     public void OnPlayerDead()
     {
+        SaveRewards();
         state = State.Dead; stateT = 0; falls++; Sfx.drumsTarget = 0; Sfx.Play("defeat", 0.7f, 0);
         hud.ShowDeath();
     }

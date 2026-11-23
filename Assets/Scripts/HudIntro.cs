@@ -9,7 +9,8 @@ public partial class Hud
     Text introHeading, introBody, introNextLabel, introCount;
     Button introNext;
     int introPage;
-    float introOpenedAt;
+    float introOpenedAt, introPageOpenedAt;
+    const float MaxIntroPageSeconds = 20f;
     public bool IntroOpen { get; private set; }
 
     void BuildIntro()
@@ -49,6 +50,7 @@ public partial class Hud
 
     void ShowIntroPage()
     {
+        introPageOpenedAt = Time.unscaledTime;
         introCount.text = (introPage + 1) + " / 3";
         if (introPage == 0)
         {
@@ -67,7 +69,7 @@ public partial class Hud
         }
         introNextLabel.text = introPage == 2 ? "Begin" : "Next";
         MenuFocusButton.KeyboardFocus = false;
-        EventSystem.current.SetSelectedGameObject(null);
+        if (EventSystem.current != null) EventSystem.current.SetSelectedGameObject(null);
     }
 
     void NextIntro() { if (!IntroOpen) return; if (++introPage > 2) CloseIntro(); else ShowIntroPage(); }
@@ -77,20 +79,24 @@ public partial class Hud
         if (!IntroOpen) return;
         IntroOpen = false; introPanel.gameObject.SetActive(false);
         PlayerPrefs.SetInt("Emberclad.IntroSeen", 1); PlayerPrefs.Save();
-        EventSystem.current.SetSelectedGameObject(null); game.MenuPause(false);
+        if (EventSystem.current != null) EventSystem.current.SetSelectedGameObject(null);
+        game.MenuPause(false);
     }
 
     void TickIntro()
     {
-        if (!IntroOpen || Time.unscaledTime < introOpenedAt + .25f) return;
+        if (!IntroOpen) return;
+        if (game == null || game.state != Game.State.Playing) { CloseIntro(); return; }
+        if (Time.unscaledTime - introPageOpenedAt >= MaxIntroPageSeconds) { NextIntro(); return; }
+        if (Time.unscaledTime < introOpenedAt + .25f) return;
         var keyboard = Keyboard.current;
         if (keyboard == null) return;
         if (keyboard.escapeKey.wasPressedThisFrame) { CloseIntro(); return; }
-        if ((keyboard.enterKey.wasPressedThisFrame || keyboard.spaceKey.wasPressedThisFrame) && EventSystem.current.currentSelectedGameObject == null) NextIntro();
+        if ((keyboard.enterKey.wasPressedThisFrame || keyboard.spaceKey.wasPressedThisFrame) && (EventSystem.current == null || EventSystem.current.currentSelectedGameObject == null)) NextIntro();
         if (keyboard.tabKey.wasPressedThisFrame || keyboard.rightArrowKey.wasPressedThisFrame || keyboard.leftArrowKey.wasPressedThisFrame)
         {
             MenuFocusButton.KeyboardFocus = true;
-            if (EventSystem.current.currentSelectedGameObject == null) EventSystem.current.SetSelectedGameObject(introNext.gameObject);
+            if (EventSystem.current != null && EventSystem.current.currentSelectedGameObject == null) EventSystem.current.SetSelectedGameObject(introNext.gameObject);
         }
     }
 }

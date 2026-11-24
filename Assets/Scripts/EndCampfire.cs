@@ -16,9 +16,8 @@ public class EndCampfire : MonoBehaviour
         var group = go.AddComponent<SortingGroup>(); group.sortingOrder = Art.YOrder(position.y);
         var artRoot = new GameObject("Rooted campfire").transform;
         artRoot.SetParent(go.transform, false); artRoot.localPosition = new Vector3(0, World.Height(position.x), 0);
-        var logs = Art.New("pr_log", artRoot, Vector3.zero, 0);
-        logs.transform.localScale = new Vector3(.8f, .8f, 1);
-        logs.color = new Color(.62f, .7f, .68f, 1);
+        var hearth = Art.New("pr_campfire", artRoot, Vector3.zero, 0);
+        hearth.color = new Color(.78f, .82f, .86f, 1);
         fire.glow = Art.New("fx_glow", artRoot, new Vector2(0, .55f), 1, "Default", true);
         fire.glow.enabled = false;
         return fire;

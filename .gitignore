@@ -39,3 +39,7 @@ __pycache__/
 /Screenshots/hpbar/
 /Screenshots/tut/
 /Screenshots/merge/
+
+# Local Cloudflare Wrangler dev state, cache (account info) and logs
+.wrangler/
+wrangler-dev.log

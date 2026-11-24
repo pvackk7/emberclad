@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Emberclad</title>
+<meta name="description" content="Emberclad: a dark fantasy adventure.">
+<meta property="og:title" content="Emberclad">
+<meta property="og:image" content="img/video-poster.jpg">
+<meta name="theme-color" content="#07070a">
+<link rel="icon" href="img/favicon.png">
+<link rel="preload" href="img/title.png" as="image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400&family=EB+Garamond:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#07070a;--ink:#b7ad9b;--dim:#6b6457;--gold:#c9b87a;--line:rgba(201,184,122,.14)}
+  html{scroll-behavior:smooth}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"EB Garamond",Georgia,serif}
+  body{overflow-x:hidden}
+
+  /* HERO */
+  .stage{position:relative;height:100vh;height:100svh;overflow:hidden;background:var(--bg) url(img/video-poster.jpg) center/cover no-repeat}
+  .stage video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;filter:saturate(.85)}
+  .stage video::-webkit-media-controls,
+  .stage video::-webkit-media-controls-start-playback-button,
+  .stage video::-webkit-media-controls-overlay-play-button{display:none!important;-webkit-appearance:none}
+  .shade{position:absolute;inset:0;pointer-events:none;background:
+      radial-gradient(ellipse at 50% 45%,rgba(7,7,10,0) 35%,rgba(7,7,10,.7) 100%),
+      linear-gradient(to bottom,rgba(7,7,10,.25) 0%,rgba(7,7,10,0) 35%,rgba(7,7,10,.55) 72%,var(--bg) 100%)}
+  h1{position:absolute;left:50%;bottom:clamp(96px,16vh,180px);transform:translateX(-50%);margin:0;width:min(74vw,1050px);
+     filter:drop-shadow(0 6px 24px rgba(0,0,0,.85))}
+  h1 img{display:block;width:100%;height:auto}
+
+  /* ARROW */
+  .descend{position:absolute;left:0;right:0;margin:0 auto;width:max-content;bottom:clamp(10px,2.2vh,22px);bottom:calc(clamp(10px,2.2vh,22px) + env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:center;gap:10px;
+           color:var(--gold);text-decoration:none;opacity:.8;transition:opacity .4s}
+  .descend:hover,.descend:focus-visible{opacity:1;outline:none}
+  .descend span{font-family:Cinzel,serif;font-size:.62rem;letter-spacing:.45em;padding-left:.45em;color:var(--dim);transition:color .4s}
+  .descend:hover span{color:var(--gold)}
+  .descend svg{width:34px;height:52px;overflow:visible;animation:sink 2.6s ease-in-out infinite;filter:drop-shadow(0 0 6px rgba(201,184,122,.35))}
+  .descend .stem{stroke-dasharray:40;animation:draw 2.6s ease-in-out infinite}
+  @keyframes sink{0%,100%{transform:translateY(0);opacity:.55}50%{transform:translateY(9px);opacity:1}}
+  @keyframes draw{0%{stroke-dashoffset:40}45%,100%{stroke-dashoffset:0}}
+
+  /* BELOW */
+  section{padding:clamp(72px,12vw,140px) clamp(16px,5vw,48px)}
+  .wrap{max-width:1080px;margin:0 auto}
+  .intro{text-align:center}
+  .eyebrow{font-family:Cinzel,serif;font-size:.7rem;letter-spacing:.4em;color:var(--gold);opacity:.75;margin:0 0 1.2rem}
+  .story{max-width:660px;margin:0 auto;text-align:left}
+  .story p{font-size:clamp(1.1rem,2.3vw,1.3rem);line-height:1.85;margin:0 0 1.4em;color:var(--ink)}
+  .story p:first-child::first-letter{float:left;font-family:Cinzel,serif;font-size:3.6em;line-height:.9;padding:.06em .12em 0 0;color:var(--gold)}
+  .sigil{width:140px;height:1px;margin:2.6rem auto 0;background:linear-gradient(90deg,transparent,var(--gold),transparent);opacity:.5}
+
+
+  .play{border-top:1px solid var(--line);text-align:center}
+  .play h2{font-family:Cinzel,serif;font-weight:400;color:#d8cdb4;font-size:clamp(1.4rem,3.6vw,2.2rem);letter-spacing:.06em;margin:0 0 2.4rem}
+  .game{position:relative;max-width:1080px;margin:0 auto;aspect-ratio:16/9;border:1px solid var(--line);overflow:hidden;
+        background:#050507 url(img/video-poster.jpg) center/cover no-repeat;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+  .game::before{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at center,rgba(5,5,7,.35),rgba(5,5,7,.85));transition:opacity .8s}
+  .game.running::before{opacity:0}
+  .game canvas{position:absolute;inset:0;width:100%;height:100%;display:block;background:#000;opacity:0;transition:opacity .8s}
+  .game.running canvas{opacity:1}
+  .start{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:none;border:0;cursor:pointer;color:var(--gold);font:inherit}
+  .start svg{width:clamp(64px,9vw,92px);height:auto;filter:drop-shadow(0 0 14px rgba(201,184,122,.35));transition:transform .5s,filter .5s}
+  .start:hover svg,.start:focus-visible svg{transform:scale(1.07);filter:drop-shadow(0 0 22px rgba(201,184,122,.6))}
+  .start:focus-visible{outline:none}
+  .start .label,.loading .label{font-family:Cinzel,serif;letter-spacing:.4em;padding-left:.4em;font-size:clamp(.75rem,1.6vw,.95rem);color:#d8cdb4}
+  .loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px}
+  .loading[hidden],.fs[hidden],.start[hidden]{display:none}
+  .bar{width:min(320px,60%);height:2px;background:rgba(201,184,122,.15)}
+  .fill{height:100%;width:0;background:var(--gold);box-shadow:0 0 10px rgba(201,184,122,.6);transition:width .3s}
+  .fs{position:absolute;right:12px;bottom:12px;width:40px;height:40px;display:grid;place-items:center;border:1px solid var(--line);background:rgba(7,7,10,.6);color:var(--gold);cursor:pointer;opacity:.6;transition:opacity .3s}
+  .fs:hover{opacity:1}
+  .fs svg{width:20px;height:20px}
+  .board{border-top:1px solid var(--line);text-align:center}
+  .board h2{font-family:Cinzel,serif;font-weight:400;color:#d8cdb4;font-size:clamp(1.4rem,3.6vw,2.2rem);letter-spacing:.06em;margin:0 0 1rem}
+  .board .note{max-width:560px;margin:0 auto 2.6rem;color:var(--dim);font-size:1.05rem;line-height:1.6}
+  .table{max-width:760px;margin:0 auto;border:1px solid var(--line);background:rgba(255,255,255,.012)}
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  th{font-family:Cinzel,serif;font-weight:400;font-size:.68rem;letter-spacing:.3em;color:var(--dim);text-align:left;padding:14px 18px;border-bottom:1px solid var(--line)}
+  td{padding:13px 18px;text-align:left;border-bottom:1px solid rgba(201,184,122,.06);font-size:1.08rem}
+  tbody tr:last-child td{border-bottom:0}
+  th.r,td.r{width:3.2em;text-align:center}
+  th.t,td.t,th.d,td.d{text-align:right}
+  td.r{font-family:Cinzel,serif;color:var(--dim)}
+  td.n{color:#d8cdb4;overflow-wrap:anywhere}
+  td.t{color:var(--gold)}
+  td.d{color:var(--dim)}
+  tbody tr.top td.r{color:var(--gold)}
+  tbody tr.top td.n{text-shadow:0 0 14px rgba(201,184,122,.25)}
+  tr.empty td{text-align:center;font-style:italic;color:var(--dim);padding:28px 18px}
+  @media (max-width:520px){ th,td{padding:11px 10px} td{font-size:1rem} th{letter-spacing:.18em} }
+  footer{padding:40px 16px 56px;text-align:center;border-top:1px solid var(--line);color:var(--dim);font-size:.85rem}
+  footer .mail{display:block;margin:0 0 .6rem;color:var(--gold);text-decoration:none;letter-spacing:.04em;font-size:1rem;opacity:.85;transition:opacity .3s}
+  footer .mail:hover{opacity:1;text-decoration:underline;text-underline-offset:4px}
+  footer b{display:block;font-family:Cinzel,serif;font-weight:400;letter-spacing:.35em;color:var(--ink);margin-bottom:.4rem}
+
+  .js .rise{opacity:0;transform:translateY(16px);transition:opacity 1.3s ease,transform 1.3s ease}
+  .js .rise.in{opacity:1;transform:none}
+
+  @media (max-aspect-ratio:1/1){ h1{width:88vw;bottom:auto;top:46%;transform:translate(-50%,-50%)} }
+  @media (prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto}
+    .descend svg,.descend .stem{animation:none}
+    .js .rise{opacity:1;transform:none;transition:none}
+  }
+</style>
+<script>document.documentElement.className='js'</script>
+</head>
+<body>
+<header class="stage">
+  <video id="bg" autoplay muted loop playsinline webkit-playsinline disablepictureinpicture disableremoteplayback preload="auto" poster="img/video-poster.jpg" aria-hidden="true" tabindex="-1">
+    <source src="video/emberclad-demo.mp4" type="video/mp4">
+  </video>
+  <div class="shade" aria-hidden="true"></div>
+  <h1><img src="img/title.png" alt="Emberclad" width="1400" height="257"></h1>
+  <a class="descend" href="#tale" aria-label="Scroll down">
+    <svg viewBox="0 0 34 52" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path class="stem" d="M17 2v38"/>
+      <path d="M6 32l11 12 11-12"/>
+      <path d="M17 47l-3 3 3 2 3-2z" fill="currentColor" stroke="none"/>
+    </svg>
+    <span>DESCEND</span>
+  </a>
+</header>
+
+<main>
+  <section id="tale" class="intro">
+    <div class="wrap">
+      <p class="eyebrow rise">THE TALE</p>
+      <div class="story">
+        <p class="rise">The flame that emerged within a mere suit of armor&ndash;resembling that of a knight&rsquo;s&ndash;would be the only thing keeping it alive. The knight knew no purpose, but to keep its fire stoked by slaying its enemies. Cresting a hill that transcended the forest, it espied a gothic castle jutting from the horizon, a formidable dragon looming over it.</p>
+        <p class="rise">Though, between the knight and the foreboding castle was a long journey. While the knight&rsquo;s purpose was unknown, aside from its means to sustain a cataclysmic flame, it grew curious as to what it was or where it came from. Conceiving that the castle had answers, it fated to wander toward it.</p>
+      </div>
+      <div class="sigil rise" aria-hidden="true"></div>
+    </div>
+  </section>
+  <section id="play" class="play">
+    <div class="wrap">
+      <p class="eyebrow rise">PLAY</p>
+      <h2 class="rise">Take up the flame</h2>
+      <div class="game rise" id="game">
+        <canvas id="unity-canvas" tabindex="-1" aria-label="Emberclad game"></canvas>
+        <button class="start" id="start" type="button">
+          <svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="30" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M26 20l18 12-18 12z" fill="currentColor"/></svg>
+          <span class="label">PLAY IN BROWSER</span>
+        </button>
+        <div class="loading" id="loading" hidden>
+          <span class="label">KINDLING&hellip;</span>
+          <div class="bar"><div class="fill" id="fill"></div></div>
+        </div>
+        <button class="fs" id="fs" type="button" hidden aria-label="Fullscreen">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+        </button>
+      </div>
+    </div>
+  </section>
+  <section id="leaderboard" class="board">
+    <div class="wrap">
+      <p class="eyebrow rise">THE LEADERBOARD</p>
+      <h2 class="rise">Fastest to fell the Bone Warden</h2>
+      <p class="note rise">Enter a nickname, finish a full run, and your time is carved here. Timed from the moment you begin to the Warden&rsquo;s fall.</p>
+      <div class="table rise">
+        <table aria-live="polite">
+          <thead><tr><th class="r">#</th><th>Knight</th><th class="t">Run time</th><th class="d">Deaths</th></tr></thead>
+          <tbody id="board-rows"><tr class="empty"><td colspan="4">Summoning the fallen&hellip;</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <b>EMBERCLAD</b>
+  <a class="mail" href="mailto:pvaksingh@solvetheory.org">pvaksingh@solvetheory.org</a>
+  In development &middot; &copy; <span id="yr">2026</span>
+</footer>
+
+<script>
+  (function () {
+    var v = document.getElementById('bg');
+    v.muted = true; v.defaultMuted = true;
+    function go() { var p = v.play(); if (p && p.catch) p.catch(function () {}); }
+    go();
+    ['touchstart', 'pointerdown', 'scroll', 'keydown'].forEach(function (e) {
+      window.addEventListener(e, go, { once: true, passive: true });
+    });
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) go(); });
+    document.getElementById('yr').textContent = new Date().getFullYear();
+    // Browser game: load the Unity build only when Play is clicked.
+    var game = document.getElementById('game'), startBtn = document.getElementById('start'), loading = document.getElementById('loading'),
+        fill = document.getElementById('fill'), fsBtn = document.getElementById('fs'), canvas = document.getElementById('unity-canvas'), unity = null;
+    startBtn.addEventListener('click', function () {
+      if (location.protocol === 'file:') { startBtn.querySelector('.label').textContent = 'PLAYS ON EMBERCLAD.ORG'; return; }
+      startBtn.hidden = true; loading.hidden = false;
+      var b = '/play/Build/WebGL_staging';
+      var sc = document.createElement('script'); sc.src = b + '.loader.js';
+      sc.onload = function () {
+        createUnityInstance(canvas, {
+          dataUrl: b + '.data.br', frameworkUrl: b + '.framework.js.br', codeUrl: b + '.wasm.br',
+          streamingAssetsUrl: '/play/StreamingAssets', companyName: 'Emberclad', productName: 'Emberclad', productVersion: '1.0',
+          showBanner: function (m, t) { if (t === 'error') console.error(m); }
+        }, function (p) { fill.style.width = Math.round(p * 100) + '%'; }).then(function (inst) {
+          unity = inst; loading.hidden = true; game.classList.add('running'); fsBtn.hidden = false; canvas.focus();
+        }).catch(function (e) {
+          console.error(e); loading.querySelector('.label').textContent = 'THE FLAME WOULD NOT CATCH. RELOAD TO TRY AGAIN.';
+        });
+      };
+      sc.onerror = function () { loading.querySelector('.label').textContent = 'COULD NOT REACH THE GAME. RELOAD TO TRY AGAIN.'; };
+      document.body.appendChild(sc);
+    });
+    game.addEventListener('pointerdown', function () { if (unity) canvas.focus(); });
+    fsBtn.addEventListener('click', function () { if (unity) unity.SetFullscreen(1); });
+    // Leaderboard
+    var rows = document.getElementById('board-rows');
+    function fmt(ms) {
+      var cs = Math.floor(ms / 10) % 100, t = Math.floor(ms / 1000), sec = t % 60, min = Math.floor(t / 60) % 60, h = Math.floor(t / 3600);
+      var p = function (n) { return (n < 10 ? '0' : '') + n; };
+      return (h ? h + ':' + p(min) : min) + ':' + p(sec) + '.' + p(cs);
+    }
+    function msg(text) {
+      rows.innerHTML = '';
+      var tr = document.createElement('tr'), td = document.createElement('td');
+      tr.className = 'empty'; td.colSpan = 4; td.textContent = text; tr.appendChild(td); rows.appendChild(tr);
+    }
+    function cell(tr, cls, text) { var td = document.createElement('td'); td.className = cls; td.textContent = text; tr.appendChild(td); }
+    function load() {
+      if (location.protocol === 'file:') { msg('The leaderboard comes alive on emberclad.org.'); return; }
+      fetch('/api/leaderboard?limit=50', { cache: 'no-store' }).then(function (r) {
+        if (!r.ok) throw new Error(r.status); return r.json();
+      }).then(function (data) {
+        if (!data.entries || !data.entries.length) { msg('No knight has felled the Bone Warden yet.'); return; }
+        rows.innerHTML = '';
+        data.entries.forEach(function (e) {
+          var tr = document.createElement('tr'); if (e.rank <= 3) tr.className = 'top';
+          cell(tr, 'r', e.rank); cell(tr, 'n', e.nickname); cell(tr, 't', fmt(e.runMs)); cell(tr, 'd', e.deaths);
+          rows.appendChild(tr);
+        });
+      }).catch(function () { msg('The leaderboard could not be reached. Try again soon.'); });
+    }
+    load(); setInterval(load, 60000);
+    var els = document.querySelectorAll('.rise');
+    if ('IntersectionObserver' in window) {
+      var io = new IntersectionObserver(function (es) {
+        es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+      }, { threshold: 0.15 });
+      els.forEach(function (el) { io.observe(el); });
+    } else { els.forEach(function (el) { el.classList.add('in'); }); }
+  })();
+</script>
+</body>
+</html>

@@ -74,3 +74,4 @@ ui_arrow 0.5 0.5 200
 ui_white 0.5 0.5 100
 fx_ray 0.5 1.0 100
 fx_vignette 0.5 0.5 100
+pr_campfire 0.5 0.10 216

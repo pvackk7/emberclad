@@ -11,7 +11,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "emberclad-leaderboard"
+      "database_name": "emberclad-leaderboard",
+      "database_id": "464940ea-499f-4fcd-8abe-bdae0dddc3d3"
     }
   ]
 }

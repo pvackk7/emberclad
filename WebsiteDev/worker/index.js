@@ -1,25 +1,35 @@
 // Emberclad website Worker: serves the static site (website/) and the speedrun leaderboard API.
 //
-// API (all JSON):
-//   POST /api/runs/start   { "nickname": "Ash" }
-//        -> 200 { "runId": "...", "token": "...", "startedAt": 1732345678901 }
-//        -> 400 { "error": "..." } bad nickname   409 nickname already on the board   429 too many starts
-//   POST /api/runs/finish  { "runId": "...", "token": "...", "deaths": 3, "clientTimeMs": 1234567 }
-//        -> 200 { "runMs": 1234000, "deaths": 3, "rank": 7 }
-//        -> 400 invalid   403 bad token   404 unknown run   409 already finished / expired
+// API (all JSON). A nickname is a knight: entering one starts a run that belongs to that name until the
+// Bone Warden falls. The game keeps {runId, token} and comes back to the same knight after deaths, exits
+// and closed tabs; progress (level, XP, felled, deaths, play time) is saved on the server as it plays.
+//   POST /api/runs/start    { "nickname": "Ash" }
+//        -> 200 { "runId", "token", "startedAt" }   400 bad nickname   409 name taken   429 too many starts
+//   POST /api/runs/resume   { "runId", "token" }
+//        -> 200 { "nickname", "xp", "level", "kills", "deaths", "playMs", "finished" }   403 bad token   404 unknown
+//   POST /api/runs/progress { "runId", "token", "xp", "level", "kills", "deaths", "playMs" }
+//        -> 200 { "ok": true }   (sent every few seconds while playing, and on deaths, level-ups and exits)
+//   POST /api/runs/finish   { "runId", "token", "deaths", "kills", "xp", "level", "clientTimeMs" }
+//        -> 200 { "runMs", "deaths", "rank" }   409 already finished
 //   GET  /api/leaderboard?limit=50
-//        -> 200 { "entries": [ { "rank": 1, "nickname": "Ash", "runMs": 1234000, "deaths": 3, "finishedAt": 1732345678901 } ] }
+//        -> 200 { "riding": 2, "knights": 31, "entries": [ { "rank", "nickname", "level", "kills", "deaths",
+//                 "runMs" (null until finished), "finished", "riding" } ] }
 //
-// Run time is measured by the server (start request -> finish request), so a client can't report a faster
-// time than it actually took. clientTimeMs is only used as a sanity check.
+// Run time is play time, not wall time: the server credits the gap between progress pings, capped at
+// PING_CREDIT_MS each, so time spent away (closed tab, menus, overnight) does not count against a knight.
+// The game's own play clock is accepted only up to what the server has seen pass.
+
 
 import { nameRefusal } from './name-filter.js';
 
 const NICK_RE = /^[A-Za-z0-9][A-Za-z0-9 _.\-]{1,15}$/;   // 2-16 chars
 const MIN_RUN_MS = 60 * 1000;          // a real full run can't be faster than this
-const MAX_RUN_MS = 12 * 60 * 60 * 1000; // runs older than this expire
 const MAX_DEATHS = 100000;
 const CLOCK_SLACK_MS = 15 * 1000;       // allowed gap between client and server timing (network, loading)
+const PING_CREDIT_MS = 20 * 1000;      // the game pings every 10 s while playing; a longer gap only counts this much
+const RIDING_MS = 90 * 1000;           // seen this recently = on the trail right now
+const IDLE_RELEASE_MS = 30 * 86400000;  // an unfinished knight untouched this long gives its name back
+const MAX_KILLS = 1000000, MAX_XP = 100000000, MAX_LEVEL = 1000;
 const STARTS_PER_HOUR_PER_IP = 40;
 
 let schemaReady = false;
@@ -60,6 +70,35 @@ async function ensureSchema(db) {
     await db.prepare(`ALTER TABLE runs ADD COLUMN user_id TEXT`).run();
   }
   await db.prepare(`CREATE INDEX IF NOT EXISTS runs_user ON runs (user_id, finished_at)`).run();
+  // One row per nickname. Replaces 'runs' (kept, read once to carry finished runs across).
+  await db.batch([
+    db.prepare(`CREATE TABLE IF NOT EXISTS knights (
+      id TEXT PRIMARY KEY,
+      token_hash TEXT NOT NULL,
+      nickname TEXT NOT NULL,
+      nickname_key TEXT NOT NULL UNIQUE,
+      ip_hash TEXT NOT NULL,
+      user_id TEXT,
+      started_at INTEGER NOT NULL,
+      last_seen INTEGER NOT NULL,
+      play_ms INTEGER NOT NULL DEFAULT 0,
+      xp INTEGER NOT NULL DEFAULT 0,
+      level INTEGER NOT NULL DEFAULT 1,
+      kills INTEGER,
+      deaths INTEGER NOT NULL DEFAULT 0,
+      finished_at INTEGER,
+      run_ms INTEGER
+    )`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS knights_seen ON knights (last_seen)`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS knights_ip ON knights (ip_hash, started_at)`),
+    db.prepare(`CREATE INDEX IF NOT EXISTS knights_user ON knights (user_id)`),
+  ]);
+  const any = await db.prepare(`SELECT 1 FROM knights LIMIT 1`).first();
+  if (!any) {
+    // Finished runs from before knights existed: no kill count or level was recorded, so kills stays NULL.
+    await db.prepare(`INSERT OR IGNORE INTO knights (id, token_hash, nickname, nickname_key, ip_hash, user_id, started_at, last_seen, play_ms, deaths, finished_at, run_ms)
+      SELECT id, token_hash, nickname, nickname_key, ip_hash, user_id, started_at, finished_at, run_ms, deaths, finished_at, run_ms FROM runs WHERE finished_at IS NOT NULL`).run();
+  }
   schemaReady = true;
 }
 
@@ -94,6 +133,19 @@ function cleanNickname(raw) {
 }
 const nickKey = nick => nick.toLowerCase().replace(/[\s_.\-]/g, '');
 
+function wholeNumber(v, max) { return Number.isInteger(v) && v >= 0 && v <= max; }
+
+async function knightFor(env, body) {
+  if (!body || typeof body.runId !== 'string' || typeof body.token !== 'string' || body.runId.length > 64) return { error: err(400, 'runId and token are required') };
+  const k = await env.DB.prepare('SELECT * FROM knights WHERE id = ?').bind(body.runId).first();
+  if (!k) return { error: err(404, 'Unknown run') };
+  if (k.token_hash !== await sha256(body.token)) return { error: err(403, 'Bad token') };
+  return { k };
+}
+
+// Play time the server will vouch for since the last ping, and the clock it allows the game to claim.
+function creditedMs(k, now) { return k.play_ms + Math.min(Math.max(0, now - k.last_seen), PING_CREDIT_MS); }
+
 async function startRun(request, env) {
   const body = await readJson(request);
   const nickname = cleanNickname(body && body.nickname);
@@ -102,64 +154,105 @@ async function startRun(request, env) {
   if (key.length < 2) return err(400, 'Nickname is too short');
   const refusal = nameRefusal(nickname);
   if (refusal) return err(400, refusal);
-
-  const taken = await env.DB.prepare('SELECT 1 FROM runs WHERE nickname_key = ? AND finished_at IS NOT NULL').bind(key).first();
-  if (taken) return err(409, 'That nickname is already on the leaderboard');
-
   const now = Date.now();
-  const ipHash = await sha256((request.headers.get('cf-connecting-ip') || 'local') + '|' + (env.IP_SALT || 'emberclad'));
-  const recent = await env.DB.prepare('SELECT COUNT(*) AS n FROM runs WHERE ip_hash = ? AND started_at > ?')
+
+  // A name held by a knight nobody has ridden for a month is given back.
+  await env.DB.prepare('DELETE FROM knights WHERE nickname_key = ? AND finished_at IS NULL AND last_seen < ?').bind(key, now - IDLE_RELEASE_MS).run();
+  const taken = await env.DB.prepare('SELECT 1 FROM knights WHERE nickname_key = ?').bind(key).first();
+  if (taken) return err(409, 'That name already belongs to another knight. Pick another.');
+
+  const ipHash = await ipHashOf(request, env);
+  const recent = await env.DB.prepare('SELECT COUNT(*) AS n FROM knights WHERE ip_hash = ? AND started_at > ?')
     .bind(ipHash, now - 3600 * 1000).first();
   if (recent && recent.n >= STARTS_PER_HOUR_PER_IP) return err(429, 'Too many runs started from here. Try again later.');
 
   const runId = randomHex(12), token = randomHex(24);
   const user = await currentUser(request, env);
-  await env.DB.prepare('INSERT INTO runs (id, token_hash, nickname, nickname_key, ip_hash, started_at, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .bind(runId, await sha256(token), nickname, key, ipHash, now, user ? user.id : null).run();
+  try {
+    await env.DB.prepare('INSERT INTO knights (id, token_hash, nickname, nickname_key, ip_hash, user_id, started_at, last_seen, kills) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)')
+      .bind(runId, await sha256(token), nickname, key, ipHash, user ? user.id : null, now, now).run();
+  } catch (e) {
+    if (String(e).includes('UNIQUE')) return err(409, 'That name already belongs to another knight. Pick another.');
+    throw e;
+  }
   return json({ runId, token, startedAt: now });
+}
+
+async function resumeRun(request, env) {
+  const { k, error } = await knightFor(env, await readJson(request));
+  if (error) return error;
+  const now = Date.now();
+  // Coming back after time away: that gap is not play time, so just mark the knight as seen.
+  if (!k.finished_at) await env.DB.prepare('UPDATE knights SET last_seen = ? WHERE id = ?').bind(now, k.id).run();
+  return json({ nickname: k.nickname, xp: k.xp, level: k.level, kills: k.kills || 0, deaths: k.deaths, playMs: k.play_ms, finished: !!k.finished_at },
+    200, { 'Cache-Control': 'no-store' });
+}
+
+// Shared by progress and finish: validate the counters and bring the row up to date. Counters only ever go up.
+function readStats(body) {
+  const st = { xp: body.xp, level: body.level, kills: body.kills, deaths: body.deaths };
+  if (!wholeNumber(st.xp, MAX_XP) || !wholeNumber(st.level, MAX_LEVEL) || !wholeNumber(st.kills, MAX_KILLS) || !wholeNumber(st.deaths, MAX_DEATHS)) return null;
+  return st;
+}
+
+async function progressRun(request, env) {
+  const body = await readJson(request);
+  const { k, error } = await knightFor(env, body);
+  if (error) return error;
+  if (k.finished_at) return err(409, 'This run is already finished');
+  const st = readStats(body);
+  if (!st) return err(400, 'xp, level, kills and deaths must be whole numbers');
+  const now = Date.now();
+  await env.DB.prepare(`UPDATE knights SET last_seen = ?, play_ms = ?, xp = MAX(xp, ?), level = MAX(level, ?), kills = MAX(COALESCE(kills, 0), ?), deaths = MAX(deaths, ?)
+    WHERE id = ? AND finished_at IS NULL`).bind(now, creditedMs(k, now), st.xp, st.level, st.kills, st.deaths, k.id).run();
+  return json({ ok: true }, 200, { 'Cache-Control': 'no-store' });
 }
 
 async function finishRun(request, env) {
   const body = await readJson(request);
-  if (!body || typeof body.runId !== 'string' || typeof body.token !== 'string') return err(400, 'runId and token are required');
-  const deaths = body.deaths;
-  if (!Number.isInteger(deaths) || deaths < 0 || deaths > MAX_DEATHS) return err(400, 'deaths must be a whole number');
+  const { k, error } = await knightFor(env, body);
+  if (error) return error;
+  if (k.finished_at) return err(409, 'This run was already submitted');
+  const st = readStats({ xp: body.xp ?? k.xp, level: body.level ?? k.level, kills: body.kills ?? (k.kills || 0), deaths: body.deaths });
+  if (!st) return err(400, 'deaths must be a whole number');
   const clientMs = body.clientTimeMs;
   if (clientMs !== undefined && (!Number.isFinite(clientMs) || clientMs < 0)) return err(400, 'clientTimeMs must be a positive number');
 
-  const run = await env.DB.prepare('SELECT * FROM runs WHERE id = ?').bind(body.runId).first();
-  if (!run) return err(404, 'Unknown run');
-  if (run.token_hash !== await sha256(body.token)) return err(403, 'Bad token');
-  if (run.finished_at) return err(409, 'This run was already submitted');
-
   const now = Date.now();
-  const runMs = now - run.started_at;
-  if (runMs > MAX_RUN_MS) return err(409, 'This run expired');
+  
+  // Play time: what the server has seen pass in pings. The game's clock may add the last few seconds,
+  // but never more than real time allows.
+  const seen = creditedMs(k, now);
+  let runMs = seen;
+  if (clientMs !== undefined) runMs = Math.max(seen, Math.min(Math.round(clientMs), seen + CLOCK_SLACK_MS, now - k.started_at));
   if (runMs < MIN_RUN_MS) return err(400, 'Run too short to be a full run');
-  // The game's own timer can't be longer than real time, and shouldn't be far shorter either.
-  if (clientMs !== undefined && (clientMs > runMs + CLOCK_SLACK_MS || clientMs < runMs - Math.max(CLOCK_SLACK_MS, runMs * 0.1)))
-    return err(400, 'Run time does not match the server clock');
 
-  try {
-    const res = await env.DB.prepare('UPDATE runs SET finished_at = ?, run_ms = ?, deaths = ? WHERE id = ? AND finished_at IS NULL')
-      .bind(now, runMs, deaths, run.id).run();
-    if (!res.meta || res.meta.changes !== 1) return err(409, 'This run was already submitted');
-  } catch (e) {
-    if (String(e).includes('UNIQUE')) return err(409, 'That nickname is already on the leaderboard');
-    throw e;
-  }
-  const ahead = await env.DB.prepare('SELECT COUNT(*) AS n FROM runs WHERE finished_at IS NOT NULL AND (run_ms < ? OR (run_ms = ? AND finished_at < ?))')
+  const res = await env.DB.prepare(`UPDATE knights SET finished_at = ?, run_ms = ?, last_seen = ?, play_ms = ?, xp = MAX(xp, ?), level = MAX(level, ?),
+      kills = MAX(COALESCE(kills, 0), ?), deaths = MAX(deaths, ?) WHERE id = ? AND finished_at IS NULL`)
+    .bind(now, runMs, now, runMs, st.xp, st.level, st.kills, st.deaths, k.id).run();
+  if (!res.meta || res.meta.changes !== 1) return err(409, 'This run was already submitted');
+  const deaths = Math.max(k.deaths, st.deaths);
+  const ahead = await env.DB.prepare('SELECT COUNT(*) AS n FROM knights WHERE finished_at IS NOT NULL AND (run_ms < ? OR (run_ms = ? AND finished_at < ?))')
     .bind(runMs, runMs, now).first();
   return json({ runMs, deaths, rank: (ahead ? ahead.n : 0) + 1 });
 }
 
+// Finished knights first, fastest first. Then everyone still on the trail, furthest along (level, XP) first.
 async function leaderboard(url, env) {
   const limit = Math.min(Math.max(parseInt(url.searchParams.get('limit') || '50', 10) || 50, 1), 200);
+  const now = Date.now();
   const { results } = await env.DB.prepare(
-    'SELECT nickname, run_ms, deaths, finished_at FROM runs WHERE finished_at IS NOT NULL ORDER BY run_ms ASC, finished_at ASC LIMIT ?'
+    `SELECT nickname, level, xp, kills, deaths, run_ms, finished_at, last_seen FROM knights
+      ORDER BY (finished_at IS NULL), run_ms ASC, level DESC, xp DESC, kills DESC, started_at ASC LIMIT ?`
   ).bind(limit).all();
-  const entries = results.map((r, i) => ({ rank: i + 1, nickname: r.nickname, runMs: r.run_ms, deaths: r.deaths, finishedAt: r.finished_at }));
-  return json({ entries }, 200, { 'Cache-Control': 'public, max-age=15' });
+  const counts = await env.DB.prepare('SELECT COUNT(*) AS knights, SUM(CASE WHEN finished_at IS NULL AND last_seen > ? THEN 1 ELSE 0 END) AS riding FROM knights')
+    .bind(now - RIDING_MS).first();
+  const entries = results.map((r, i) => ({
+    rank: i + 1, nickname: r.nickname, level: r.kills == null ? null : r.level, kills: r.kills,   // runs from before knights: no level or kills recorded
+    deaths: r.deaths,
+    runMs: r.finished_at ? r.run_ms : null, finished: !!r.finished_at, riding: !r.finished_at && r.last_seen > now - RIDING_MS,
+  }));
+  return json({ riding: (counts && counts.riding) || 0, knights: (counts && counts.knights) || 0, entries }, 200, { 'Cache-Control': 'public, max-age=10' });
 }
 
 // ---- Accounts (email + password, session cookie) ----
@@ -269,8 +362,8 @@ async function myRuns(request, env) {
   if (!user) return err(401, 'Log in to see your runs');
   const { results } = await env.DB.prepare(
     `SELECT r.nickname, r.run_ms, r.deaths, r.finished_at,
-            (SELECT COUNT(*) FROM runs o WHERE o.finished_at IS NOT NULL AND (o.run_ms < r.run_ms OR (o.run_ms = r.run_ms AND o.finished_at < r.finished_at))) + 1 AS rank
-       FROM runs r WHERE r.user_id = ? AND r.finished_at IS NOT NULL ORDER BY r.run_ms ASC LIMIT 200`
+            (SELECT COUNT(*) FROM knights o WHERE o.finished_at IS NOT NULL AND (o.run_ms < r.run_ms OR (o.run_ms = r.run_ms AND o.finished_at < r.finished_at))) + 1 AS rank
+       FROM knights r WHERE r.user_id = ? AND r.finished_at IS NOT NULL ORDER BY r.run_ms ASC LIMIT 200`
   ).bind(user.id).all();
   return json({ user: { email: user.email }, runs: results.map(r => ({ nickname: r.nickname, runMs: r.run_ms, deaths: r.deaths, finishedAt: r.finished_at, rank: r.rank })) },
     200, { 'Cache-Control': 'no-store' });
@@ -343,6 +436,8 @@ export default {
         return new Response(res.body, { status: res.status, headers: h });
       }
       if (url.pathname === '/api/runs/start' && request.method === 'POST') return await startRun(request, env);
+      if (url.pathname === '/api/runs/resume' && request.method === 'POST') return await resumeRun(request, env);
+      if (url.pathname === '/api/runs/progress' && request.method === 'POST') return await progressRun(request, env);
       if (url.pathname === '/api/runs/finish' && request.method === 'POST') return await finishRun(request, env);
       if (url.pathname === '/api/leaderboard' && request.method === 'GET') return await leaderboard(url, env);
       return err(404, 'Not found');

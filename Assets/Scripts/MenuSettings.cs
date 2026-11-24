@@ -81,9 +81,7 @@ public static class MenuSettings
 
     public static float Volume(string name)
     {
-        // Music starts off; players can turn it up in Options and the choice is saved.
-        float def = name == "Music" ? 0f : 1f;
-        if (!volumes.TryGetValue(name, out var v)) { v = PlayerPrefs.GetFloat("Volume." + name, def); volumes[name] = v; }
+        if (!volumes.TryGetValue(name, out var v)) { v = PlayerPrefs.GetFloat("Volume." + name, 1f); volumes[name] = v; }
         return v;
     }
 

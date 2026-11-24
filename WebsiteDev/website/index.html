@@ -293,7 +293,7 @@
       if (touch) { immersive(true); if (!standalone) { if (canFullscreen()) enterFullscreen(); else showTip(); } }
       startBtn.hidden = true; loading.hidden = false;
       // Bump BUILD whenever a new game build is copied in, so browsers fetch the new files.
-      var BUILD = '20261124-055529', b = '/play/Build/WebGL_staging', v = '?v=' + BUILD;
+      var BUILD = '20261124-071440', b = '/play/Build/WebGL_staging', v = '?v=' + BUILD;
       var sc = document.createElement('script'); sc.src = b + '.loader.js' + v;
       sc.onload = function () {
         createUnityInstance(canvas, {

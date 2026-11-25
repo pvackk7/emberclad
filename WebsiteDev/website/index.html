@@ -252,6 +252,19 @@
       var mm = window.matchMedia; if (mm && mm('(pointer: coarse)').matches) return true;
       return navigator.maxTouchPoints > 0 && !(mm && mm('(pointer: fine)').matches);
     })();
+    // Unity listens for keys on the whole window (capture phase) and cancels them, so letters
+    // typed into a page text field (the game's nickname box on phones) never arrive. This runs
+    // first, because it is registered before Unity loads, and keeps those keys away from Unity.
+    ['keydown', 'keypress', 'keyup'].forEach(function (type) {
+      window.addEventListener(type, function (e) {
+        var el = e.target, tag = el && el.tagName;
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA') return;
+        e.stopImmediatePropagation();
+        // Stopping here also skips the field's own Enter handler, so submit the name from here.
+        var S = window.__emberText;
+        if (type === 'keydown' && e.key === 'Enter' && S && el === S.el) { e.preventDefault(); S.submit = 1; el.blur(); }
+      }, true);
+    });
     // Launched from the Home Screen: no browser chrome to hide.
     var standalone = navigator.standalone === true || !!(window.matchMedia && (matchMedia('(display-mode: fullscreen)').matches || matchMedia('(display-mode: standalone)').matches));
     function fsElement() { return document.fullscreenElement || document.webkitFullscreenElement || null; }

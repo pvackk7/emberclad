@@ -48,8 +48,10 @@ public class Game : MonoBehaviour
     /// A new nickname is a new knight: level 1 again. Progress belongs to the name.
     public static void ResetKnightProgress()
     {
-        sessionExperience = 0; PlayerPrefs.SetInt(XpKey, 0); PlayerPrefs.Save();
-        if (I != null) { I.Experience = 0; I.rewardsDirty = false; }
+        // Cinders too: they used to be kept per browser, so a new level-1 knight showed every coin
+        // earned by every earlier name played there.
+        sessionExperience = 0; PlayerPrefs.SetInt(XpKey, 0); PlayerPrefs.SetInt("Emberclad.Cinders", 0); PlayerPrefs.Save();
+        if (I != null) { I.Experience = 0; I.Cinders = 0; I.rewardsDirty = false; }
     }
 
     /// Resuming a knight: take the site's saved XP if it is further along than this browser's.

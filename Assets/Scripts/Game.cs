@@ -45,13 +45,23 @@ public class Game : MonoBehaviour
     // test sessions left huge values there. Persistent progression starts clean from this build.
     const string XpKey = "Emberclad.XP";
 
-    /// A new nickname is a new knight: level 1 again. Progress belongs to the name.
+    /// A new nickname is a new player: nothing earned under an earlier name in this browser carries
+    /// over -- no XP, cinders or found abilities, and the intro and first lessons show again.
+    /// (These used to be kept per browser, so a level-1 knight could start rich and fully armed.)
     public static void ResetKnightProgress()
     {
-        // Cinders too: they used to be kept per browser, so a new level-1 knight showed every coin
-        // earned by every earlier name played there.
-        sessionExperience = 0; PlayerPrefs.SetInt(XpKey, 0); PlayerPrefs.SetInt("Emberclad.Cinders", 0); PlayerPrefs.Save();
-        if (I != null) { I.Experience = 0; I.Cinders = 0; I.rewardsDirty = false; }
+        sessionExperience = 0; checkpoint = 0; runTime = 0;
+        PlayerPrefs.SetInt(XpKey, 0);
+        foreach (var k in new[] { "Emberclad.Cinders", "Emberclad.Shield", "Emberclad.Embers", "Emberclad.Slam", "Emberclad.IntroSeen", "Emberclad.TaughtBlade" })
+            PlayerPrefs.DeleteKey(k);
+        PlayerPrefs.Save();
+        if (I != null)
+        {
+            I.Experience = 0; I.Cinders = 0; I.HasShield = false; I.HasEmbers = false; I.HasSlam = false; I.rewardsDirty = false;
+            // The menu's knight is already standing in the forest; take back what it was given at spawn.
+            if (I.player != null) I.player.UnequipShield();
+        }
+        QuickItems.Select(0);
     }
 
     /// Resuming a knight: take the site's saved XP if it is further along than this browser's.

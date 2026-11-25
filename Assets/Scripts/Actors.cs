@@ -283,6 +283,14 @@ public class Player : Actor
         shieldSprite.transform.localScale = Vector3.one * 1.05f;
     }
 
+    public void UnequipShield()
+    {
+        if (shieldSprite == null) return;
+        var go = shieldSprite.gameObject; shieldSprite = null;
+        go.transform.SetParent(null, false); Destroy(go);   // off the rig first, so the re-cache below no longer finds it
+        CacheRenderers();
+    }
+
     public void Begin() { if (st == St.Intro) introT = 0.9f; }
     public void SkipIntro() { st = St.Normal; }
     public void Celebrate() { if (!dead) { st = St.Win; t = 0; } }

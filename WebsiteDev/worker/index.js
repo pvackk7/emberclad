@@ -21,6 +21,10 @@
 
 
 import { nameRefusal } from './name-filter.js';
+// The home page is bundled with the worker (served below) rather than uploaded as a static asset,
+// so a page-only change can be deployed with a plain worker upload. website/.assetsignore keeps it
+// out of the asset upload.
+import indexHtml from '../website/index.html';
 
 const NICK_RE = /^[A-Za-z0-9][A-Za-z0-9 _.\-]{1,15}$/;   // 2-16 chars
 const MIN_RUN_MS = 60 * 1000;          // a real full run can't be faster than this
@@ -423,6 +427,9 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname.startsWith('/play/Build/')) return serveGameFile(request, env, url);
+    if (url.pathname === '/' || url.pathname === '/index.html') {
+      return new Response(request.method === 'HEAD' ? null : indexHtml, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=0, must-revalidate' } });
+    }
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
     const privateApi = url.pathname.startsWith('/api/auth/') || url.pathname.startsWith('/api/me/');
     if (request.method === 'OPTIONS') return privateApi ? new Response(null, { status: 204 }) : new Response(null, { status: 204, headers: CORS });

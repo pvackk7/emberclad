@@ -204,6 +204,7 @@ public static class RunRecord
     static void SaveLocal()
     {
         PlayerPrefs.SetInt(RunPlayPref, playMs); PlayerPrefs.SetInt(RunKillsPref, Game.runKills); PlayerPrefs.SetInt(RunDeathsPref, Game.falls);
+        Game.SaveSpot();
         PlayerPrefs.Save();
     }
 
@@ -211,6 +212,7 @@ public static class RunRecord
     static void Clear()
     {
         foreach (var k in new[] { RunNickPref, RunIdPref, RunTokenPref, RunPlayPref, RunKillsPref, RunDeathsPref }) PlayerPrefs.DeleteKey(k);
+        Game.ClearSpot();
         PlayerPrefs.Save();
     }
 

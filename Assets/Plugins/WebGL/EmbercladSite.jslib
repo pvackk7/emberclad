@@ -113,6 +113,19 @@ mergeInto(LibraryManager.library, {
     return (S && S.el && document.activeElement === S.el) ? 1 : 0;
   },
 
+  // Closing or hiding the page (tab closed, browser quit, phone locked or switched app). The game
+  // saves the run here, because WebGL never gets OnApplicationQuit for a closed tab. 'hidden'
+  // comes first and leaves time for the save to reach IndexedDB; 'pagehide' is the last chance.
+  EmbercladOnPageLeave: function (callback) {
+    // The site can tear the game down and start a new one, so always call the newest game's callback.
+    window.__emberLeave = function () { try { {{{ makeDynCall('v', 'callback') }}}(); } catch (e) { console.warn('save on leave failed', e); } };
+    if (window.__emberLeaveHooked) return;
+    window.__emberLeaveHooked = true;
+    var fire = function () { if (window.__emberLeave) window.__emberLeave(); };
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden') fire(); });
+    window.addEventListener('pagehide', fire);
+  },
+
   // 0 windowed, 1 fullscreen, 2 the browser cannot (iPhone Safari), 3 launched from the
   // home screen, which already has no browser chrome.
   EmbercladFullscreenState: function () {

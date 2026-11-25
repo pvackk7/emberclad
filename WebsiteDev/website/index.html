@@ -338,6 +338,7 @@
         loading.querySelector('.label').textContent = 'KINDLING\u2026'; startBtn.hidden = false;
         tip.hidden = true; exitFullscreen(); immersive(false);
       };
+      window.__emberLeave = null;   // the game being shut down can no longer save on page close
       if (unity) { var u = unity; unity = null; u.Quit().then(done, done); } else done();
     };
     fetch('/api/auth/me', { cache: 'no-store', credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (d) {

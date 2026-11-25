@@ -20,6 +20,7 @@ public static class WebBridge
     [DllImport("__Internal")] static extern int EmbercladTextFocused();
     [DllImport("__Internal")] static extern int EmbercladFullscreenState();
     [DllImport("__Internal")] static extern void EmbercladFullscreenToggle();
+    [DllImport("__Internal")] static extern void EmbercladOnPageLeave(System.Action callback);
     public const bool Web = true;
 #else
     public const bool Web = false;
@@ -111,6 +112,23 @@ public static class WebBridge
         float sw = Mathf.Max(1, Screen.width), sh = Mathf.Max(1, Screen.height);
         return new Rect(r.xMin / sw, 1f - r.yMax / sh, r.width / sw, r.height / sh);
     }
+
+    // ---- leaving the page -----------------------------------------------------------
+    static bool leaveHooked;
+
+    /// Closing the tab or browser never reaches OnApplicationQuit in WebGL, so the page tells the
+    /// game when it is hidden or unloading, and the run is saved there and then.
+    public static void ListenForPageLeave()
+    {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        if (leaveHooked) return;
+        leaveHooked = true;
+        try { EmbercladOnPageLeave(PageLeaving); } catch { leaveHooked = false; }
+#endif
+    }
+
+    [AOT.MonoPInvokeCallback(typeof(System.Action))]
+    static void PageLeaving() { Game.PageLeaving(); }
 
     // ---- fullscreen ---------------------------------------------------------------
 

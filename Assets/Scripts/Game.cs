@@ -52,6 +52,7 @@ public class Game : MonoBehaviour
     {
         sessionExperience = 0; checkpoint = 0; runTime = 0;
         PlayerPrefs.SetInt(XpKey, 0);
+        PlayerPrefs.DeleteKey(SpotKey);
         foreach (var k in new[] { "Emberclad.Cinders", "Emberclad.Shield", "Emberclad.Embers", "Emberclad.Slam", "Emberclad.IntroSeen", "Emberclad.TaughtBlade" })
             PlayerPrefs.DeleteKey(k);
         PlayerPrefs.Save();
@@ -71,6 +72,63 @@ public class Game : MonoBehaviour
         sessionExperience = Mathf.Max(sessionExperience, xp); PlayerPrefs.SetInt(XpKey, sessionExperience); PlayerPrefs.Save();
         if (I != null) I.Experience = Mathf.Max(I.Experience, xp);
     }
+    // ---- Where the knight stands ------------------------------------------------------------
+    // Leaving a run (Return to Menus, or closing/hiding the page) keeps the knight's spot, health and
+    // potions; the next Play puts them back there. The run clock is already paused while away
+    // (RunRecord only counts time in the forest, and the site ignores the gap on resume).
+    // Saved as "encounter|x|y|hp|potions"; hp -1 means full health.
+    const string SpotKey = "Emberclad.Run.Spot";
+
+    /// Called from RunRecord whenever the run is saved. Only a knight in the forest has a spot;
+    /// on the title screen (before Play) the saved one is left alone.
+    public static void SaveSpot()
+    {
+        var g = I; if (g == null || g.player == null) return;
+        string v;
+        if (g.state == State.Dead) v = "0|0.5|-2.6|-1|3";   // death already sends the knight back to the start
+        else if (g.state != State.Playing) return;
+        else
+        {
+            var p = g.player;
+            // Mid-fight the wave can't be rebuilt, so come back just before that encounter.
+            int enc = Mathf.Clamp(g.encIdx, 0, g.encs.Length - 1);
+            Vector2 at = g.inEnc ? new Vector2(g.encs[enc].x - 7f, -2.6f) : p.pos;
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            v = enc + "|" + at.x.ToString("0.###", ci) + "|" + at.y.ToString("0.###", ci) + "|" + p.hp + "|" + p.potions;
+        }
+        PlayerPrefs.SetString(SpotKey, v);
+    }
+
+    public static void ClearSpot() { PlayerPrefs.DeleteKey(SpotKey); }
+
+    /// Play on a knight mid-run: stand it back where it was. False when there is nothing saved.
+    bool RestoreSpot()
+    {
+        var a = PlayerPrefs.GetString(SpotKey, "").Split('|');
+        var ci = System.Globalization.CultureInfo.InvariantCulture; var num = System.Globalization.NumberStyles.Float;
+        if (a.Length < 5 || !int.TryParse(a[0], out int enc) || !float.TryParse(a[1], num, ci, out float x) || !float.TryParse(a[2], num, ci, out float y)
+            || !int.TryParse(a[3], out int hp) || !int.TryParse(a[4], out int potions)) return false;
+        enc = Mathf.Clamp(enc, 0, encs.Length - 1);
+        x = Mathf.Min(x, encs[enc].x - 2.5f);   // never inside the next encounter's trigger
+        encIdx = enc; checkpoint = enc;
+        if (encIdx >= 3) maxTokens = 3;
+        player.pos = new Vector2(x, y);
+        player.hp = hp < 0 ? player.maxHp : Mathf.Clamp(hp, 1, player.maxHp);
+        player.potions = Mathf.Clamp(potions, 0, 3);
+        CameraRig.I.SnapTo(x + 1.4f);
+        // Gear the early rounds hand out: if the knight left before picking it up, lay it at their feet.
+        if (enc >= 1 && !HasShield) Pickup.Drop(Pickup.Kind.Shield, new Vector2(x + 1.6f, y), 1);
+        if (enc >= 2 && !HasEmbers) Pickup.Drop(Pickup.Kind.Ember, new Vector2(x + 2.6f, y), 1);
+        return true;
+    }
+
+    /// The page is being hidden or closed (WebBridge): save everything while there is still time.
+    public static void PageLeaving()
+    {
+        if (I != null) I.SaveRewards();
+        RunRecord.Sync();
+    }
+
     bool rewardsDirty;
     float rewardSaveTimer;
 
@@ -173,6 +231,7 @@ public class Game : MonoBehaviour
         HasEmbers = PlayerPrefs.GetInt("Emberclad.Embers", 0) == 1;
         HasSlam = PlayerPrefs.GetInt("Emberclad.Slam", 0) == 1;
         I = this; Time.timeScale = 1; Enemy.tokens = 0; Actor.All.Clear();
+        WebBridge.ListenForPageLeave();
         // No frame cap: -1 lets WebGL run on requestAnimationFrame (the display's own rate) instead of a
         // setTimeout-driven 60 that stutters below it, and desktop builds sync to the monitor (60/120 Hz).
         QualitySettings.vSyncCount = Application.isEditor ? 0 : 1;
@@ -197,7 +256,7 @@ public class Game : MonoBehaviour
 
     public void MenuPause(bool value) { paused = value; Time.timeScale = value ? 0 : 1; }
     public bool Paused => paused;
-    public void StartFromMenu() { state = State.Playing; stateT = 0; hud.HideTitle(true); player.Begin(); Sfx.Play("ui_start", 0.6f, 0); hud.BeginIntro(); }
+    public void StartFromMenu() { state = State.Playing; stateT = 0; if (RunRecord.Active) RestoreSpot(); hud.HideTitle(true); player.Begin(); Sfx.Play("ui_start", 0.6f, 0); hud.BeginIntro(); }
     public void ReturnToMenu() { RunRecord.Abandon(); SaveRewards(); skipTitle = false; checkpoint = 0; Time.timeScale = 1; SceneManager.LoadScene(SceneManager.GetActiveScene().name); }
     public void HitStop(float d) { hitStop = Mathf.Max(hitStop, d); }
 

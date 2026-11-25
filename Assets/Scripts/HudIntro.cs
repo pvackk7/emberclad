@@ -29,7 +29,7 @@ public partial class Hud
         const float W = 500f;
         var box = Rect("Stone guide", introPanel, center, Vector2.zero, new Vector2(W, 330), center);
         box.gameObject.AddComponent<MenuPlateGraphic>().raycastTarget = true;
-        introHeading = Txt("", box, TC, new Vector2(0, -24), new Vector2(W - 60, 44), 32, Gold, TextAnchor.MiddleCenter, TC, false);
+        introHeading = Txt("", box, TC, new Vector2(0, -24), new Vector2(W - 60, 44), 32, Ink, TextAnchor.MiddleCenter, TC, false);
         if (menuTitleFont != null) introHeading.font = menuTitleFont;
         // Just the keys: they say everything the panel needs to.
         KeyBlock(box, -86f, new[] { new[] { "W", "A", "S", "D" }, new[] { "SPACE" }, new[] { "F" } }, new[] { "Move", "Jump", "Roll" });
@@ -44,7 +44,7 @@ public partial class Hud
         var rt = Rect(label, parent, a, position, new Vector2(300, 72), a);
         var plate = rt.gameObject.AddComponent<MenuPlateGraphic>(); plate.raycastTarget = true;
         var text = Txt(label, rt, center, Vector2.zero, new Vector2(248, 58), 28, Cream, TextAnchor.MiddleCenter, null, false);
-        var marker = Txt("◆", rt, center, new Vector2(-116, 0), new Vector2(20, 25), 12, Gold, TextAnchor.MiddleCenter, null, false);
+        var marker = Txt("•", rt, center, new Vector2(-116, 0), new Vector2(20, 25), 18, Gold, TextAnchor.MiddleCenter, null, false);
         var button = rt.gameObject.AddComponent<MenuFocusButton>(); button.targetGraphic = plate; button.Configure(plate, text, marker); button.onClick.AddListener(action);
         return button;
     }

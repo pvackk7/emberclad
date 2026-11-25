@@ -22,8 +22,8 @@ public partial class Hud
 
     void BuildMenu()
     {
-        menuTitleFont = Resources.Load<Font>("Fonts/EmbercladSerif");
-        menuButtonFont = Resources.Load<Font>("Fonts/EmbercladMenu");
+        menuTitleFont = Resources.Load<Font>("Fonts/Cinzel-Bold");
+        menuButtonFont = Resources.Load<Font>("Fonts/Cinzel-SemiBold");
         if (menuButtonFont == null) menuButtonFont = menuTitleFont;
         gameObject.AddComponent<GraphicRaycaster>();
         if (EventSystem.current == null)
@@ -78,8 +78,8 @@ public partial class Hud
         var shadow = caption.gameObject.AddComponent<Shadow>(); shadow.effectColor = new Color(0.05f, 0.055f, 0.05f, 0.8f); shadow.effectDistance = new Vector2(0, -2);
         var marker = Txt("", im.transform, center, Vector2.zero, new Vector2(10, 10), 14, Gold, TextAnchor.MiddleCenter, null, false);
         var b = im.gameObject.AddComponent<MenuFocusButton>(); b.targetGraphic = im;
-        b.idleColor = new Color(0.78f, 0.68f, 0.55f, 1f);
-        b.focusColor = new Color(0.97f, 0.83f, 0.62f, 1f);
+        b.idleColor = new Color(0.78f, 0.77f, 0.75f, 1f);   // soft white; focus brightens to pure white
+        b.focusColor = new Color(1f, 1f, 1f, 1f);
         b.focusScale = 1.025f;
         b.Configure(im, caption, marker);
         b.onClick.AddListener(action); return b;
@@ -120,7 +120,7 @@ public partial class Hud
             {
                 // Key bindings mean nothing on a phone; fullscreen does.
                 fullscreenLabel = MenuButton(FullscreenLabel(), -75, ToggleFullscreen).GetComponentsInChildren<Text>()[0];
-                fullscreenHint = Txt("", menuContent, center, new Vector2(0, -128), new Vector2(1300, 40), 22, Gold);
+                fullscreenHint = Txt("", menuContent, center, new Vector2(0, -128), new Vector2(1300, 40), 22, Ink);
                 if (menuButtonFont != null) fullscreenHint.font = menuButtonFont;
             }
             else MenuButton("Controls", -75, () => MenuPage(3));
@@ -150,10 +150,10 @@ public partial class Hud
                 // Tightened to fit fourteen rows without running into the hint below.
                 var b = MenuButton(MenuSettings.Actions[i] + "     " + MenuSettings.Binding(i), 272 - i * 39, () => { binding = n; awaitingBindingRelease = true; bindingLabel.text = "Press a key · Escape cancels"; });
                 b.GetComponent<RectTransform>().sizeDelta = new Vector2(540, 38);
-                foreach (var label in b.GetComponentsInChildren<Text>()) if (label.text != "◆") label.fontSize = 23;
+                foreach (var label in b.GetComponentsInChildren<Text>()) if (label.text != "•") label.fontSize = 23;
                 if (first == null) first = b;
             }
-            bindingLabel = Txt("Duplicate keys swap automatically", menuContent, center, new Vector2(0, -300), new Vector2(900, 40), 22, Gold);
+            bindingLabel = Txt("Duplicate keys swap automatically", menuContent, center, new Vector2(0, -300), new Vector2(900, 40), 22, Ink);
             MenuButton("Back", -355, () => MenuPage(1));
         }
         firstMenuButton = first;
@@ -184,8 +184,8 @@ public partial class Hud
         loading = true; loadUntil = Time.unscaledTime + 1.6f;
         if (menuDragon != null) menuDragon.PassNow();   // the big dragon sweeps through while the forest loads
         foreach (Transform child in menuContent) { child.gameObject.SetActive(false); Destroy(child.gameObject); }
-        Txt("Entering the forest…", menuContent, center, new Vector2(0, -250), new Vector2(1000, 70), 38, Gold);
-        if (!string.IsNullOrEmpty(unrankedNote)) Txt(unrankedNote, menuContent, center, new Vector2(0, -410), new Vector2(1500, 50), 24, Gold);
+        Txt("Entering the forest…", menuContent, center, new Vector2(0, -250), new Vector2(1000, 70), 38, Ink);
+        if (!string.IsNullOrEmpty(unrankedNote)) Txt(unrankedNote, menuContent, center, new Vector2(0, -410), new Vector2(1500, 50), 24, Ink);
         EventSystem.current.SetSelectedGameObject(null);
     }
 

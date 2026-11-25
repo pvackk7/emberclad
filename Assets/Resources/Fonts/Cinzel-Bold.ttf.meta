@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 26da367a30bac4fb898606e36f883754
+guid: f3bd51458a444ea587c4879d8ce1fe1d
 TrueTypeFontImporter:
   externalObjects: {}
   serializedVersion: 4
@@ -9,7 +9,7 @@ TrueTypeFontImporter:
   characterPadding: 1
   includeFontData: 1
   fontNames:
-  - Latin Modern Roman Demi
+  - Cinzel
   fallbackFontReferences: []
   customCharacters: 
   fontRenderingMode: 0

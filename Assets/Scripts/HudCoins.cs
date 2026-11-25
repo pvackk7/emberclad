@@ -38,7 +38,7 @@ public partial class Hud
         cinderPlate = FramedPanel("Cinders", root, BR, new Vector2(-34, 34), PlateSize);
         cinderPlate.pivot = BR;
         cinderCoin = Img("ui_coin", cinderPlate, BR, CoinSlot, new Vector2(44, 44), Color.white, new Vector2(0.5f, 0.5f)).rectTransform;
-        cinderText = Txt("0", cinderPlate, BR, new Vector2(-20, PlateSize.y / 2), new Vector2(140, 40), 32, Gold, TextAnchor.MiddleRight, new Vector2(1, 0.5f));
+        cinderText = Txt("0", cinderPlate, BR, new Vector2(-20, PlateSize.y / 2), new Vector2(140, 40), 32, Ink, TextAnchor.MiddleRight, new Vector2(1, 0.5f));
     }
 
     Coin FreeCoin()
@@ -130,7 +130,7 @@ public partial class Hud
         plateFlash = Mathf.MoveTowards(plateFlash, 0f, dt * 3.2f);
         float ps = 1f + platePunch * .085f;
         cinderPlate.localScale = new Vector3(ps, ps, 1);
-        cinderText.color = Color.Lerp(Gold, Color.white, plateFlash * .75f);
+        cinderText.color = Color.Lerp(Ink, Gold, plateFlash * .75f);
 
         // Anything that changed the purse without a burst (loading a save, a
         // refund, a debug key) still has to agree with the plate.

@@ -79,7 +79,7 @@ public class TouchControls : MonoBehaviour
     static Vector2 StickHome => Screen.height > Screen.width ? new Vector2(150, 215) : new Vector2(250, 215);
 
     static readonly Color Rim = new Color(.31f, .27f, .19f, .92f), RimLit = new Color(.94f, .76f, .53f, 1f),
-        Well = new Color(.075f, .065f, .055f, .74f), Cream = new Color(.89f, .83f, .75f, 1f), Gold = new Color(.94f, .76f, .53f, 1f);
+        Well = new Color(.075f, .065f, .055f, .74f), Cream = new Color(.86f, .85f, .83f, 1f), Ink = new Color(.98f, .97f, .95f, 1f);
 
     class Btn
     {
@@ -137,8 +137,8 @@ public class TouchControls : MonoBehaviour
         var sc = gameObject.AddComponent<CanvasScaler>(); sc.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         sc.referenceResolution = new Vector2(1536, 864); sc.matchWidthOrHeight = .5f;
         root = (RectTransform)transform;
-        font = Resources.Load<Font>("Fonts/GameFont");
-        labelFont = Resources.Load<Font>("Fonts/EmbercladMenu"); if (labelFont == null) labelFont = font;
+        font = Resources.Load<Font>("Fonts/Cinzel-SemiBold");
+        labelFont = Resources.Load<Font>("Fonts/Cinzel-Bold"); if (labelFont == null) labelFont = font;
 
         buttons = Full("Buttons", root); buttonsCg = buttons.gameObject.AddComponent<CanvasGroup>();
         buttonsCg.blocksRaycasts = false; buttonsCg.interactable = false;
@@ -172,7 +172,7 @@ public class TouchControls : MonoBehaviour
 
         portraitPanel = Full("Turn sideways", root);
         var shade = portraitPanel.gameObject.AddComponent<Image>(); shade.color = new Color(.02f, .02f, .03f, .82f); shade.raycastTarget = false;
-        Txt("TURN YOUR DEVICE SIDEWAYS", portraitPanel, new Vector2(0, 40), new Vector2(1400, 80), 46, Gold, labelFont);
+        Txt("TURN YOUR DEVICE SIDEWAYS", portraitPanel, new Vector2(0, 40), new Vector2(1400, 80), 46, Ink, labelFont);
         Txt("Emberclad plays best in landscape.\nTap to keep playing upright.", portraitPanel, new Vector2(0, -60), new Vector2(1400, 120), 28, Cream, font);
         portraitPanel.gameObject.SetActive(false);
     }

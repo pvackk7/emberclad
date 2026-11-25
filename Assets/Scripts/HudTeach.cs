@@ -55,7 +55,7 @@ public partial class Hud
         var plate = Full("Plate", teachCard);
         plate.gameObject.AddComponent<MenuPlateGraphic>().raycastTarget = false;
 
-        var heading = Txt(title.ToUpperInvariant(), teachCard, TC, new Vector2(0, -18), new Vector2(CardW - CardPad * 2, 40), 29, Gold, TextAnchor.MiddleCenter, TC);
+        var heading = Txt(title.ToUpperInvariant(), teachCard, TC, new Vector2(0, -18), new Vector2(CardW - CardPad * 2, 40), 29, Ink, TextAnchor.MiddleCenter, TC);
         if (menuTitleFont != null) heading.font = menuTitleFont;
 
         // Keys only: the explanations were cut (the user found them unnecessary). The body

@@ -55,7 +55,7 @@ public partial class Hud
         var heading = Txt(create ? "CREATE ACCOUNT" : "SIGN IN", menuContent, center, new Vector2(0, 330), new Vector2(1000, 100), 54, Cream, TextAnchor.MiddleCenter, null, true);
         if (menuTitleFont != null) heading.font = menuTitleFont;
 
-        var blurb = Txt(create ? "Choose a name and a password to begin your journey." : "Welcome back, emberclad.", menuContent, center, new Vector2(0, 250), new Vector2(1100, 50), 24, Gold, TextAnchor.MiddleCenter, null, false);
+        var blurb = Txt(create ? "Choose a name and a password to begin your journey." : "Welcome back, emberclad.", menuContent, center, new Vector2(0, 250), new Vector2(1100, 50), 24, Ink, TextAnchor.MiddleCenter, null, false);
         if (menuButtonFont != null) blurb.font = menuButtonFont;
 
         float y = create ? 150 : 120;
@@ -64,7 +64,7 @@ public partial class Hud
         if (create) AddAccountField("Confirm password", y - 220, true, false);
 
         float afterFields = create ? y - 300 : y - 190;
-        accountMessage = Txt("", menuContent, center, new Vector2(0, afterFields), new Vector2(1100, 44), 22, Gold, TextAnchor.MiddleCenter, null, false);
+        accountMessage = Txt("", menuContent, center, new Vector2(0, afterFields), new Vector2(1100, 44), 22, Ink, TextAnchor.MiddleCenter, null, false);
         if (menuButtonFont != null) accountMessage.font = menuButtonFont;
 
         var submit = MenuButton(create ? "Create Account" : "Sign In", afterFields - 70, Submit);
@@ -83,7 +83,7 @@ public partial class Hud
     {
         var field = new AccountInput { Label = label, Masked = masked, UsernameRules = usernameRules };
 
-        var caption = Txt(label.ToUpperInvariant(), menuContent, center, new Vector2(-270, y + 42), new Vector2(540, 28), 19, Gold, TextAnchor.MiddleLeft, null, false);
+        var caption = Txt(label.ToUpperInvariant(), menuContent, center, new Vector2(-270, y + 42), new Vector2(540, 28), 19, Ink, TextAnchor.MiddleLeft, null, false);
         if (menuButtonFont != null) caption.font = menuButtonFont;
 
         field.Box = Img("ui_white", menuContent, center, new Vector2(0, y), new Vector2(560, 56), FieldIdle, center);

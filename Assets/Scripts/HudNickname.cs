@@ -20,7 +20,7 @@ public partial class Hud
     float nickCaretT;
     Keyboard nickKeyboard;
     bool nickWeb; int nickWebVersion = -1; Rect nickWebRect;
-    static readonly Color NickHint = new Color(0.89f, 0.83f, 0.75f, 0.45f);
+    static readonly Color NickHint = new Color(0.86f, 0.85f, 0.83f, 0.45f);
 
     /// Play: continue the knight that is mid-run, or ask for a new name.
     void PlayOrContinue()
@@ -29,7 +29,7 @@ public partial class Hud
         if (nickBusy) return;
         nickBusy = true;
         foreach (Transform child in menuContent) { child.gameObject.SetActive(false); Destroy(child.gameObject); }
-        Txt("Riding as " + RunRecord.SavedNickname + "…", menuContent, center, new Vector2(0, -250), new Vector2(1000, 70), 38, Gold);
+        Txt("Riding as " + RunRecord.SavedNickname + "…", menuContent, center, new Vector2(0, -250), new Vector2(1000, 70), 38, Ink);
         StartCoroutine(RunRecord.Resume(message =>
         {
             nickBusy = false;
@@ -52,7 +52,7 @@ public partial class Hud
 
         nickBox = Img("ui_white", menuContent, center, new Vector2(0, 80), new Vector2(560, 60), FieldFocus, center);
         nickDisplay = Txt("", nickBox.transform, center, Vector2.zero, new Vector2(510, 50), 28, Cream, TextAnchor.MiddleCenter, null, false);
-        nickMessage = Txt("", menuContent, center, new Vector2(0, 15), new Vector2(1100, 44), 22, Gold, TextAnchor.MiddleCenter, null, false);
+        nickMessage = Txt("", menuContent, center, new Vector2(0, 15), new Vector2(1100, 44), 22, Ink, TextAnchor.MiddleCenter, null, false);
         if (menuButtonFont != null) nickMessage.font = menuButtonFont;
 
         var begin = MenuButton("Begin", -60, SubmitNickname);

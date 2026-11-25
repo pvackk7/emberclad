@@ -40,7 +40,7 @@ public partial class Hud
             if (tag == null)
             {
                 tag = new DamageTag();
-                tag.text = Txt("0", damageLayer, new Vector2(.5f, .5f), Vector2.zero, new Vector2(260, 70), 38, Gold, TextAnchor.MiddleCenter, new Vector2(.5f, .5f));
+                tag.text = Txt("0", damageLayer, new Vector2(.5f, .5f), Vector2.zero, new Vector2(260, 70), 38, Ink, TextAnchor.MiddleCenter, new Vector2(.5f, .5f));
                 tag.rt = tag.text.rectTransform;
                 damageTags.Add(tag);
             }
@@ -87,7 +87,7 @@ public partial class Hud
             float heat = Mathf.Clamp01(t.total / 80f);
             t.text.fontSize = Mathf.RoundToInt(Mathf.Lerp(34f, 62f, heat));
             float fade = t.hold > 0f ? 1f : Mathf.Clamp01(1f + t.hold / DriftOut);
-            var c = Color.Lerp(Gold, new Color(1f, .40f, .20f), heat);
+            var c = Color.Lerp(Ink, new Color(1f, .40f, .20f), heat);
             c.a = fade;
             t.text.color = c;
             float s = (1f + t.punch * .45f) * (.9f + fade * .1f);

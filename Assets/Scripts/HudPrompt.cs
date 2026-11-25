@@ -66,7 +66,7 @@ public partial class Hud
             levelPunch = 1f;
         }
         levelPunch = Mathf.MoveTowards(levelPunch, 0f, dt * 2f);
-        levelText.color = Color.Lerp(Gold, Color.white, levelPunch);
+        levelText.color = Color.Lerp(Ink, Gold, levelPunch);
         float s = 1f + levelPunch * .2f;
         levelText.rectTransform.localScale = new Vector3(s, s, 1);
     }

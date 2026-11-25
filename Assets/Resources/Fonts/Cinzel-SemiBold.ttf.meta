@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 6051ce0669146406698a8969feb100ca
+guid: 3d3fce0a38064aeca3df9c3db2444527
 TrueTypeFontImporter:
   externalObjects: {}
   serializedVersion: 4
@@ -9,7 +9,7 @@ TrueTypeFontImporter:
   characterPadding: 1
   includeFontData: 1
   fontNames:
-  - Latin Modern Roman
+  - Cinzel
   fallbackFontReferences: []
   customCharacters: 
   fontRenderingMode: 0

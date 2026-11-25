@@ -26,7 +26,10 @@ public partial class Hud : MonoBehaviour
     float manaPulse, bannerT, bannerDur, goT; bool goOn, titleOn; Enemy boss; float bossShown = 1;
     const float HpW = 302, BossW = 820;   // HpH moved to EmberHealthBar.ChH with the rest of the channel
 
-    static readonly Color Dark = new Color(0.045f, 0.035f, 0.055f, 0.86f), Cream = new Color(0.89f, 0.83f, 0.75f, 1), Gold = new Color(0.94f, 0.76f, 0.53f, 1);
+    static readonly Color Dark = new Color(0.045f, 0.035f, 0.055f, 0.86f), Gold = new Color(0.94f, 0.76f, 0.53f, 1);
+    // All game text is white Roman capitals (Cinzel): Ink for headings and values, Cream (soft white) for
+    // captions and body text. Gold is kept for frames, handles and highlights, not for words.
+    static readonly Color Ink = new Color(0.98f, 0.97f, 0.95f, 1), Cream = new Color(0.86f, 0.85f, 0.83f, 1);
     static readonly Color Stamina = new Color(.36f, .62f, .95f), StaminaLow = new Color(.24f, .36f, .62f);
 
     RectTransform Rect(string name, Transform parent, Vector2 anchor, Vector2 pos, Vector2 size, Vector2? pivot = null)
@@ -106,7 +109,7 @@ public partial class Hud : MonoBehaviour
 
     public void Build(Game g)
     {
-        game = g; font = Resources.Load<Font>("Fonts/GameFont");
+        game = g; font = Resources.Load<Font>("Fonts/Cinzel-Bold");
         var canvas = gameObject.AddComponent<Canvas>(); canvas.renderMode = RenderMode.ScreenSpaceOverlay; canvas.sortingOrder = 10;
         var sc = gameObject.AddComponent<CanvasScaler>(); sc.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize; sc.referenceResolution = new Vector2(1536, 864); sc.matchWidthOrHeight = 0.5f; // 1920x1080 / 1.25: the whole HUD draws 25% larger
         root = (RectTransform)transform;
@@ -119,7 +122,7 @@ public partial class Hud : MonoBehaviour
         var pp = FramedPanel("Knight panel", root, TL, new Vector2(28, -28), new Vector2(515, 146));
         Img("ui_round", pp, TL, new Vector2(14, -14), new Vector2(80, 76), new Color(0.2f, 0.13f, 0.14f, 1), null, true);
         Img("k_head", pp, TL, new Vector2(20, -18), new Vector2(68, 66), Color.white);
-        cardName = Txt(CardName(), pp, TL, new Vector2(132, -13), new Vector2(330, 34), 24, Gold, TextAnchor.MiddleLeft);   // the run's nickname, KNIGHT if none
+        cardName = Txt(CardName(), pp, TL, new Vector2(132, -13), new Vector2(330, 34), 24, Ink, TextAnchor.MiddleLeft);   // the run's nickname, KNIGHT if none
         cardName.resizeTextForBestFit = true; cardName.resizeTextMinSize = 14; cardName.resizeTextMaxSize = 24;
         // Health is a strip of coals with a flame at the leading edge. EmberHealthBar draws
         // its own iron frame, so the plate and the two flat fill rects that used to live
@@ -130,7 +133,7 @@ public partial class Hud : MonoBehaviour
         staminaImage = Img("ui_white", pp, TL, new Vector2(138, -98), new Vector2(HpW, 12), Stamina);
         staminaFill = staminaImage.rectTransform;
         Txt("STAMINA", pp, TL, new Vector2(20, -92), new Vector2(108, 26), 16, Cream, TextAnchor.MiddleLeft);
-        levelText = Txt("LV 1", pp, TL, new Vector2(20, -120), new Vector2(108, 26), 18, Gold, TextAnchor.MiddleLeft);
+        levelText = Txt("LV 1", pp, TL, new Vector2(20, -120), new Vector2(108, 26), 18, Ink, TextAnchor.MiddleLeft);
         Img("ui_round", pp, TL, new Vector2(132, -122), new Vector2(HpW + 12, 14), Dark, null, true);
         xpFill = Img("ui_white", pp, TL, new Vector2(138, -125), new Vector2(0, 8), new Color(0.88f, 0.81f, 0.69f, 1)).rectTransform;
 
@@ -157,7 +160,7 @@ public partial class Hud : MonoBehaviour
 
         // --- banner ---
         bannerRT = Rect("Banner", root, C, new Vector2(0, 220), new Vector2(1400, 140)); bannerCg = Group(bannerRT, 0);
-        bannerText = Txt("", bannerRT, C, Vector2.zero, new Vector2(1400, 140), 84, Gold);
+        bannerText = Txt("", bannerRT, C, Vector2.zero, new Vector2(1400, 140), 84, Ink);
 
         BuildMenu(); BuildOverlays(C); BuildHelp(C);
 
@@ -173,7 +176,7 @@ public partial class Hud : MonoBehaviour
         deathPanel = Full("Death", root); deathCg = Group(deathPanel, 0);
         var d = deathPanel.gameObject.AddComponent<Image>(); d.color = new Color(0.12f, 0.02f, 0.03f, 0.6f); d.raycastTarget = false;
         Txt("YOU FELL", deathPanel, C, new Vector2(0, 90), new Vector2(1400, 160), 130, new Color(1, 0.45f, 0.4f));
-        deathPrompt = Txt(TouchControls.Enabled ? "Tap to rise" : "Press  R  to rise", deathPanel, C, new Vector2(0, -50), new Vector2(1400, 60), 40, Gold);
+        deathPrompt = Txt(TouchControls.Enabled ? "Tap to rise" : "Press  R  to rise", deathPanel, C, new Vector2(0, -50), new Vector2(1400, 60), 40, Ink);
         victoryPanel = Full("Victory", root); victoryCg = Group(victoryPanel, 0);
         var v = victoryPanel.gameObject.AddComponent<Image>(); v.color = new Color(0.04f, 0.08f, 0.06f, 0.55f); v.raycastTarget = false;
     }
@@ -182,7 +185,7 @@ public partial class Hud : MonoBehaviour
     {
         helpPanel = Full("Help", root);
         var d = helpPanel.gameObject.AddComponent<Image>(); d.color = new Color(0.03f, 0.07f, 0.08f, 0.7f); d.raycastTarget = false;
-        Txt("PAUSED", helpPanel, C, new Vector2(0, 300), new Vector2(1000, 120), 90, Gold);
+        Txt("PAUSED", helpPanel, C, new Vector2(0, 300), new Vector2(1000, 120), 90, Ink);
         // The same plate as every other panel, instead of a stretched sprite.
         var box = Rect("Controls", helpPanel, C, new Vector2(0, -10), new Vector2(1000, 380), C); Vector2 L = new Vector2(0, 1);
         box.gameObject.AddComponent<MenuPlateGraphic>().raycastTarget = false;
@@ -196,7 +199,7 @@ public partial class Hud : MonoBehaviour
             KeyRow(box, L, new Vector2(110, -64 - i * 78), leftKeys[i], leftLabels[i], 0.85f, 30, 300);
             KeyRow(box, L, new Vector2(590, -64 - i * 78), rightKeys[i], rightLabels[i], 0.85f, 30, 300);
         }
-        Txt("Press  TAB  to resume", helpPanel, C, new Vector2(0, -260), new Vector2(1000, 60), 40, Gold);
+        Txt("Press  TAB  to resume", helpPanel, C, new Vector2(0, -260), new Vector2(1000, 60), 40, Ink);
         helpPanel.gameObject.SetActive(false);
     }
 
@@ -236,7 +239,7 @@ public partial class Hud : MonoBehaviour
     public void ShowVictory(float time, int kills, int bestCombo, int falls)
     {
         victoryOn = true; Vector2 C = new Vector2(0.5f, 0.5f);
-        Txt("FOREST CLEARED", victoryPanel, C, new Vector2(0, 300), new Vector2(1600, 160), 120, Gold);
+        Txt("FOREST CLEARED", victoryPanel, C, new Vector2(0, 300), new Vector2(1600, 160), 120, Ink);
         var box = Img("ui_round", victoryPanel, C, new Vector2(0, -20), new Vector2(820, 300), Dark, null, true).rectTransform;
         int m = (int)(time / 60), s = (int)(time % 60);
         string shownTime = RunRecord.LastClientMs > 0 ? RunRecord.FormatMs(RunRecord.LastClientMs) : $"{m}:{s:00}";
@@ -245,9 +248,9 @@ public partial class Hud : MonoBehaviour
         for (int i = 0; i < 4; i++)
         {
             Txt(labels[i], box, new Vector2(0, 1), new Vector2(60, -40 - i * 62), new Vector2(400, 50), 36, Cream, TextAnchor.MiddleLeft);
-            Txt(values[i], box, new Vector2(1, 1), new Vector2(-60, -40 - i * 62), new Vector2(300, 50), 38, Gold, TextAnchor.MiddleRight);
+            Txt(values[i], box, new Vector2(1, 1), new Vector2(-60, -40 - i * 62), new Vector2(300, 50), 38, Ink, TextAnchor.MiddleRight);
         }
-        victorySaved = Txt(RunRecord.SaveHeading, victoryPanel, C, new Vector2(0, -192), new Vector2(1200, 50), 40, Gold);
+        victorySaved = Txt(RunRecord.SaveHeading, victoryPanel, C, new Vector2(0, -192), new Vector2(1200, 50), 40, Ink);
         victoryResult = Txt(RunRecord.ResultText, victoryPanel, C, new Vector2(0, -232), new Vector2(1500, 44), 28, Cream);
         victoryPrompt = Txt(TouchControls.Enabled ? "Tap to return to the menu" : "Press  R  to return to the menu", victoryPanel, C, new Vector2(0, -290), new Vector2(1200, 60), 36, Cream);
     }

@@ -172,7 +172,9 @@ public class Player : Actor
 {
     public enum St { Intro, Normal, Attack, Heavy, Slam, Cast, Dodge, Hurt, Dead, Win, Drink, Guard }
     public St st = St.Intro;
-    public const float MaxStamina = 100, LightCost = 18, HeavyCost = 34, RollCost = 28;
+    // Light swings are cheap (about eight from a full bar, was five) and stamina starts coming back sooner
+    // after one, so the light combo can be leaned on; heavy, roll and block costs are unchanged.
+    public const float MaxStamina = 100, LightCost = 12, HeavyCost = 34, RollCost = 28, LightRegenDelay = .5f;
     public int potions = 3;
     public bool CanDrink => !dead && st == St.Normal && z <= .01f && potions > 0 && hp < maxHp;
     public bool TryDrink()
@@ -185,10 +187,10 @@ public class Player : Actor
     float staminaDelay;
     public bool Attacking => st == St.Attack || st == St.Heavy;
     public bool RollProtected => st == St.Dodge && t >= .02f && t < .28f;
-    public bool SpendStamina(float amount)
+    public bool SpendStamina(float amount, float regenDelay = .8f)
     {
         if (stamina < amount) { buf = ""; return false; }
-        stamina -= amount; staminaDelay = .8f; return true;
+        stamina -= amount; staminaDelay = regenDelay; return true;
     }
     public void Parried(int direction)
     {
@@ -198,10 +200,10 @@ public class Player : Actor
         kb = new Vector2(direction * 3, 0); vel = Vector2.zero;
         Fx.HitSpark(Center, .7f, new Color(.75f, .85f, 1));
     }
-    /// An Ember Burst is paid for in blood, not charges: one eighth of the knight's
-    /// maximum, and never the last of it. A full bar is therefore worth exactly
-    /// seven casts, and the eighth is refused rather than fatal.
-    public int EmberCost { get { return Mathf.Max(1, Mathf.CeilToInt(maxHp / 8f)); } }
+    /// An Ember Burst is paid for in blood, not charges: one thirteenth of the knight's
+    /// maximum (was an eighth), and never the last of it. A full bar is worth twelve
+    /// casts (was seven), and the one after is refused rather than fatal.
+    public int EmberCost { get { return Mathf.Max(1, Mathf.CeilToInt(maxHp / 13f)); } }
     public bool HasEmbers { get { return Cheats.On || (Game.I != null && Game.I.HasEmbers); } }
     public bool CanCast { get { return !dead && HasEmbers && (Cheats.On || hp > EmberCost); } }
     public int comboHits; public float comboHitsT; public int maxCombo; public int kills;
@@ -432,7 +434,7 @@ public class Player : Actor
     void StartAttack(Vector2 move)
     {
         if (z > .05f && airSwings >= 3) { buf = ""; return; }
-        if (!SpendStamina(LightCost)) return;
+        if (!SpendStamina(LightCost, LightRegenDelay)) return;
         buf = ""; Face(move); usedAttack = true;
         air = z > 0.05f;
         if (air)

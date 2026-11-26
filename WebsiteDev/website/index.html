@@ -132,9 +132,10 @@
   tbody tr.top td.r{color:var(--gold)}
   tbody tr.top td.n{text-shadow:0 0 14px rgba(201,184,122,.25)}
   tr.empty td{text-align:center;font-style:italic;color:var(--dim);padding:28px 18px}
-  td.n small{display:block;font-size:.78rem;letter-spacing:.14em;color:var(--dim);font-family:Cinzel,serif;margin-top:2px}
+  td.n small{display:block;white-space:nowrap;font-size:.78rem;letter-spacing:.14em;color:var(--dim);font-family:Cinzel,serif;margin-top:2px}
   td.t.ride{color:var(--dim);font-style:italic}
-  .live{display:inline-block;width:7px;height:7px;border-radius:50%;background:#c97a3a;box-shadow:0 0 8px #c97a3a;margin-left:8px;vertical-align:middle;animation:ember 1.8s ease-in-out infinite}
+  td.t.online{color:#5fd17a;font-style:normal;letter-spacing:.04em}
+  .live{display:inline-block;width:7px;height:7px;border-radius:50%;background:#5fd17a;box-shadow:0 0 8px #5fd17a;margin-right:7px;vertical-align:middle;animation:ember 1.8s ease-in-out infinite}
   @keyframes ember{50%{opacity:.35}}
   .riding{margin:-1.6rem auto 1.6rem;color:var(--dim);font-size:.95rem;letter-spacing:.04em;min-height:1.4em}
   @media (max-width:520px){ th,td{padding:11px 10px} td{font-size:1rem} th{letter-spacing:.18em} }
@@ -356,24 +357,34 @@
       var tr = document.createElement('tr'), td = document.createElement('td');
       tr.className = 'empty'; td.colSpan = 4; td.textContent = text; tr.appendChild(td); rows.appendChild(tr);
     }
-    function cell(tr, cls, text) { var td = document.createElement('td'); td.className = cls; td.textContent = text; tr.appendChild(td); }
+    function cell(tr, cls, text) { var td = document.createElement('td'); td.className = cls; td.textContent = text; tr.appendChild(td); return td; }
+    // 'just now', '5m ago', '3h ago', '2d ago', '6w ago'
+    function ago(ms) {
+      var m = Math.floor(ms / 60000);
+      if (m < 1) return 'just now';
+      if (m < 60) return m + 'm ago';
+      var h = Math.floor(m / 60); if (h < 24) return h + 'h ago';
+      var d = Math.floor(h / 24); if (d < 14) return d + 'd ago';
+      return Math.floor(d / 7) + 'w ago';
+    }
     function load() {
       if (location.protocol === 'file:') { msg('The leaderboard comes alive on emberclad.org.'); return; }
       fetch('/api/leaderboard?limit=50', { cache: 'no-store' }).then(function (r) {
         if (!r.ok) throw new Error(r.status); return r.json();
       }).then(function (data) {
         var rd = document.getElementById('riding'), n = data.riding || 0;
-        rd.textContent = n ? (n === 1 ? '1 knight is on the trail right now' : n + ' knights are on the trail right now') : (data.knights ? data.knights + (data.knights === 1 ? ' knight has' : ' knights have') + ' ridden so far' : '');
+        rd.textContent = n ? (n === 1 ? '1 knight online now' : n + ' knights online now') : (data.knights ? data.knights + (data.knights === 1 ? ' knight has' : ' knights have') + ' ridden so far' : '');
         if (!data.entries || !data.entries.length) { msg('No knight has been named yet. Be the first.'); return; }
         rows.innerHTML = '';
         data.entries.forEach(function (e) {
           var tr = document.createElement('tr'); if (e.finished && e.rank <= 3) tr.className = 'top';
           cell(tr, 'r', e.rank);
           var name = document.createElement('td'); name.className = 'n'; name.textContent = e.nickname;
-          if (e.riding) { var dot = document.createElement('span'); dot.className = 'live'; dot.title = 'On the trail now'; name.appendChild(dot); }
           if (e.level) { var lv = document.createElement('small'); lv.textContent = 'Level ' + e.level; name.appendChild(lv); }
           tr.appendChild(name);
-          if (e.finished) cell(tr, 't', fmt(e.runMs)); else cell(tr, 't ride', 'on the trail');
+          if (e.finished) cell(tr, 't', fmt(e.runMs));
+          else if (e.riding) { var on = cell(tr, 't online', 'Online'), dot = document.createElement('span'); dot.className = 'live'; on.insertBefore(dot, on.firstChild); }
+          else cell(tr, 't ride', e.seenAgoMs == null ? '\u2014' : 'Last online ' + ago(e.seenAgoMs));
           cell(tr, 'd', (e.kills == null ? '\u2014' : e.kills) + ' / ' + e.deaths);
           rows.appendChild(tr);
         });

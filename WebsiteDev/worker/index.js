@@ -255,6 +255,8 @@ async function leaderboard(url, env) {
     rank: i + 1, nickname: r.nickname, level: r.kills == null ? null : r.level, kills: r.kills,   // runs from before knights: no level or kills recorded
     deaths: r.deaths,
     runMs: r.finished_at ? r.run_ms : null, finished: !!r.finished_at, riding: !r.finished_at && r.last_seen > now - RIDING_MS,
+    // Unfinished knights show when they were last playing. Sent as an age, not a timestamp, so visitors' clocks don't matter.
+    seenAgoMs: r.finished_at ? null : Math.max(0, now - (r.last_seen || now)),
   }));
   return json({ riding: (counts && counts.riding) || 0, knights: (counts && counts.knights) || 0, entries }, 200, { 'Cache-Control': 'public, max-age=10' });
 }

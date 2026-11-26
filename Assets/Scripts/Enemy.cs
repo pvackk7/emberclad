@@ -79,6 +79,13 @@ public class Enemy : Actor
 
     // Every enemy's walk scaled together (user, 2026-11-23): x4.9/2.9 so a regular skeleton walks exactly with the knight.
     public const float SpeedScale = 4.9f / 2.9f;
+    /// Beginner rounds (Game.EaseFor): a slower, clearer wind-up and a softer hit.
+    public void Ease(float windupMul, float dmgMul)
+    {
+        windup *= windupMul;
+        dmg = Mathf.Max(1, Mathf.RoundToInt(dmg * dmgMul));
+    }
+
     void Stats(int hp_, float speed_, int dmg_, float scale_, float windup_, float range_, float radius_)
     {
         hp = maxHp = hp_; speed = speed_ * SpeedScale * Random.Range(0.9f, 1.1f); dmg = dmg_; scale = scale_; windup = windup_; range = range_; radius = radius_;

@@ -111,7 +111,7 @@ public class Game : MonoBehaviour
         enc = Mathf.Clamp(enc, 0, encs.Length - 1);
         x = Mathf.Min(x, encs[enc].x - 2.5f);   // never inside the next encounter's trigger
         encIdx = enc; checkpoint = enc;
-        if (encIdx >= 3) maxTokens = 3;
+        maxTokens = TokensFor(encIdx);
         player.pos = new Vector2(x, y);
         player.hp = hp < 0 ? player.maxHp : Mathf.Clamp(hp, 1, player.maxHp);
         player.potions = Mathf.Clamp(potions, 0, 3);
@@ -162,8 +162,11 @@ public class Game : MonoBehaviour
     // and the GO arrow that points at the next.
     readonly Enc[] encs =
     {
-        new Enc(16f,  "G:-7,0.5 G:-4.4,-0.45 G:5,0.4 G:7.4,-0.5"),            // 1: four regulars, no shields
-        new Enc(38f,  "B:6,0 R:-5.5,0.45"),                                   // 2: a helmet and a small one
+        // 1: the same four regulars as before, but they arrive as a ramp instead of an ambush from
+        //    both sides: one ahead, then two ahead, then one from behind (learn to turn round).
+        //    Only one may swing at a time here, and they telegraph longer and hit softer (EaseFor).
+        new Enc(16f,  "G:6,0.1", "G:5,0.45 G:7.4,-0.45", "G:-6.5,0.3"),
+        new Enc(38f,  "B:6,0 R:-5.5,0.45"),                                   // 2: a helmet and a small one (lightly eased)
         new Enc(60f,  "S:-6.5,0.3 S:6,-0.25 R:-3.4,-0.5 R:3.6,0.55"),         // 3: two shields, two small
         new Enc(82f,  "G:-6,0.4 G:6.4,-0.3 R:-3.4,-0.5 R:4,0.55 B:8,0"),      // 4: two regular, two small, a helmet
         // The baby dragon is parked, not deleted: BabyDragon.cs and EmberShot.cs are
@@ -249,7 +252,7 @@ public class Game : MonoBehaviour
         player = Player.Create(new Vector2(startX, -2.6f));
         hud = new GameObject("HUD").AddComponent<Hud>(); hud.Build(this);
         rig.SnapTo(startX + 1.4f);
-        if (encIdx >= 3) maxTokens = 3;
+        maxTokens = TokensFor(encIdx);
         if (skipTitle) { state = State.Playing; player.SkipIntro(); hud.HideTitle(true); }
         else { state = State.Title; hud.ShowTitle(); }
     }
@@ -345,7 +348,7 @@ public class Game : MonoBehaviour
         // The Bone Warden is fought inside one screen: the camera stops and the frame edges become walls until he dies.
         if (e.waves[0] == "BOSS") CameraRig.I.Lock(center); else CameraRig.I.HoldForward(center);
         Sfx.drumsTarget = 0.5f; hud.HideGo();
-        if (encIdx >= 3) maxTokens = 3;
+        maxTokens = TokensFor(encIdx);
         if (e.waves[0] == "BOSS") StartCoroutine(BossIntro(center));
         else
         {
@@ -402,10 +405,26 @@ public class Game : MonoBehaviour
             bool shield = code == 'S';
 
             Vector2 at = new Vector2(center + dx, Mathf.Clamp(laneY + dy, World.MinY + .15f, World.MaxY - .1f));
-            alive.Add(Enemy.Create(kind, at, shield));
+            var made = Enemy.Create(kind, at, shield);
+            EaseFor(encIdx, out float windupMul, out float dmgMul);
+            if (windupMul != 1f || dmgMul != 1f) made.Ease(windupMul, dmgMul);
+            alive.Add(made);
             yield return new WaitForSeconds(0.14f);
         }
         spawning = false;
+    }
+
+    // ---- Beginner ramp -------------------------------------------------------------------------
+    // The first two rounds teach; from round 3 on, every number is exactly what it always was, so
+    // the skill a fast full run takes (the later rounds and the Bone Warden) is unchanged.
+    /// How many skeletons may be mid-swing at once.
+    static int TokensFor(int enc) { return enc == 0 ? 1 : enc >= 3 ? 3 : 2; }
+    /// Longer wind-ups (an easier read of the attack) and softer hits in the opening rounds.
+    static void EaseFor(int enc, out float windupMul, out float dmgMul)
+    {
+        if (enc == 0) { windupMul = 1.4f; dmgMul = 0.7f; }
+        else if (enc == 1) { windupMul = 1.2f; dmgMul = 0.85f; }
+        else { windupMul = 1f; dmgMul = 1f; }
     }
 
     public void SpawnAdds(int count, Vector2 around)
@@ -534,7 +553,7 @@ public class Game : MonoBehaviour
     /// second shield or re-taught something they know.
     void TutorialDrop(Enemy e)
     {
-        if (!LastOfWave(e)) return;
+        if (!LastOfWave(e) || wave < encs[encIdx].waves.Length - 1) return;   // only when the whole round is done
         int dir = e.pos.x < player.pos.x ? -1 : 1;
         if (encIdx == 0 && !HasShield) tutorialDrop = Pickup.Drop(Pickup.Kind.Shield, e.pos, dir);
         else if (encIdx == 1 && !HasEmbers) tutorialDrop = Pickup.Drop(Pickup.Kind.Ember, e.pos, dir);
